@@ -2,7 +2,6 @@
  * Registry of predefined procedures and analysis rules
  */
 
-import type { VcsType } from "cyrus-core";
 import type { ProcedureDefinition, RequestClassification } from "./types.js";
 
 /**
@@ -50,23 +49,18 @@ export const SUBROUTINES = {
 	ghPr: {
 		name: "gh-pr",
 		promptPath: "subroutines/gh-pr.md",
-		description: "Create or update GitHub Pull Request",
-	},
-	// Azure DevOps PR subroutines
-	azPrCreate: {
-		name: "az-pr-create",
-		promptPath: "subroutines/az-pr-create.md",
-		description: "Create draft PR in Azure DevOps and update changelog",
-	},
-	azPrFinalize: {
-		name: "az-pr-finalize",
-		promptPath: "subroutines/az-pr-finalize.md",
-		description: "Update and finalize Azure DevOps Pull Request",
+		variants: {
+			"azure-devops": "subroutines/gh-pr.azure-devops.md",
+		},
+		description: "Create or update Pull Request",
 	},
 	changelogUpdate: {
 		name: "changelog-update",
 		promptPath: "subroutines/changelog-update.md",
-		description: "Update changelog (only if changelog files exist)",
+		variants: {
+			"azure-devops": "subroutines/changelog-update.azure-devops.md",
+		},
+		description: "Update changelog and create draft PR",
 	},
 	conciseSummary: {
 		name: "concise-summary",
@@ -224,49 +218,6 @@ export const PROCEDURES: Record<string, ProcedureDefinition> = {
 			"Release workflow that invokes project release skill or asks user for release info",
 		subroutines: [SUBROUTINES.releaseExecution, SUBROUTINES.releaseSummary],
 	},
-
-	// Azure DevOps specific procedures
-	"full-development-azure": {
-		name: "full-development-azure",
-		description:
-			"For code changes requiring full verification and PR creation (Azure DevOps)",
-		subroutines: [
-			SUBROUTINES.codingActivity,
-			SUBROUTINES.verifications,
-			SUBROUTINES.azPrCreate, // Azure: Combined changelog + draft PR creation
-			SUBROUTINES.gitCommit,
-			SUBROUTINES.azPrFinalize, // Azure: Finalize PR
-			SUBROUTINES.conciseSummary,
-		],
-	},
-
-	"documentation-edit-azure": {
-		name: "documentation-edit-azure",
-		description:
-			"For documentation/markdown edits that don't require verification (Azure DevOps)",
-		subroutines: [
-			SUBROUTINES.primary,
-			SUBROUTINES.gitCommit,
-			SUBROUTINES.azPrCreate,
-			SUBROUTINES.azPrFinalize,
-			SUBROUTINES.conciseSummary,
-		],
-	},
-
-	"debugger-full-azure": {
-		name: "debugger-full-azure",
-		description:
-			"Full debugging workflow with reproduction, fix, and verification (Azure DevOps)",
-		subroutines: [
-			SUBROUTINES.debuggerReproduction,
-			SUBROUTINES.debuggerFix,
-			SUBROUTINES.verifications,
-			SUBROUTINES.azPrCreate,
-			SUBROUTINES.gitCommit,
-			SUBROUTINES.azPrFinalize,
-			SUBROUTINES.conciseSummary,
-		],
-	},
 };
 
 /**
@@ -308,56 +259,4 @@ export function getProcedureForClassification(
  */
 export function getAllProcedureNames(): string[] {
 	return Object.keys(PROCEDURES);
-}
-
-/**
- * Mapping from GitHub procedure names to Azure DevOps equivalents
- */
-const GITHUB_TO_AZURE_PROCEDURE: Record<string, string> = {
-	"full-development": "full-development-azure",
-	"documentation-edit": "documentation-edit-azure",
-	"debugger-full": "debugger-full-azure",
-};
-
-/**
- * Get the platform-specific procedure name based on VCS type
- *
- * @param baseProcedureName - The base procedure name (GitHub-style)
- * @param vcsType - The version control system type
- * @returns The platform-appropriate procedure name
- */
-export function getPlatformProcedure(
-	baseProcedureName: string,
-	vcsType?: VcsType,
-): string {
-	// Default to GitHub if no vcsType specified (backward compatible)
-	if (!vcsType || vcsType === "github") {
-		return baseProcedureName;
-	}
-
-	// For Azure DevOps, check if there's a platform-specific variant
-	if (vcsType === "azure-devops") {
-		const azureProcedure = GITHUB_TO_AZURE_PROCEDURE[baseProcedureName];
-		if (azureProcedure && PROCEDURES[azureProcedure]) {
-			return azureProcedure;
-		}
-	}
-
-	// Fallback to base procedure if no platform-specific variant exists
-	return baseProcedureName;
-}
-
-/**
- * Get procedure name for a given classification, considering VCS platform
- *
- * @param classification - The request classification
- * @param vcsType - The version control system type (optional, defaults to "github")
- * @returns The platform-appropriate procedure name
- */
-export function getProcedureForClassificationWithVcs(
-	classification: RequestClassification,
-	vcsType?: VcsType,
-): string {
-	const baseProcedure = CLASSIFICATION_TO_PROCEDURE[classification];
-	return getPlatformProcedure(baseProcedure, vcsType);
 }

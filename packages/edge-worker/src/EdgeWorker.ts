@@ -40,6 +40,7 @@ import type {
 	SerializableEdgeWorkerState,
 	SerializedCyrusAgentSession,
 	SerializedCyrusAgentSessionEntry,
+	VcsType,
 	Webhook,
 	WebhookAgentSession,
 	WebhookComment,
@@ -751,12 +752,13 @@ export class EdgeWorker extends EventEmitter {
 			`[Subroutine Transition] Next subroutine: ${nextSubroutine.name}`,
 		);
 
-		// Load subroutine prompt
+		// Load subroutine prompt (with VCS-specific variant resolution)
 		let subroutinePrompt: string | null;
 		try {
 			subroutinePrompt = await this.loadSubroutinePrompt(
 				nextSubroutine,
 				this.config.linearWorkspaceSlug,
+				repo.vcsType,
 			);
 			if (!subroutinePrompt) {
 				// Fallback if loadSubroutinePrompt returns null
@@ -861,10 +863,11 @@ export class EdgeWorker extends EventEmitter {
 		}
 
 		try {
-			// Load the verifications prompt
+			// Load the verifications prompt (with VCS-specific variant resolution)
 			const subroutinePrompt = await this.loadSubroutinePrompt(
 				verificationsSubroutine,
 				this.config.linearWorkspaceSlug,
+				repo.vcsType,
 			);
 
 			if (!subroutinePrompt) {
@@ -1784,26 +1787,17 @@ export class EdgeWorker extends EventEmitter {
 		let finalProcedure: ProcedureDefinition;
 		let finalClassification: RequestClassification;
 
-		// Get VCS type for platform-specific procedure selection
-		const vcsType = repository.vcsType;
-
 		// If labels indicate a specific procedure, use that instead of AI routing
 		if (hasDebuggerLabel) {
-			// Get platform-specific debugger procedure
-			const debuggerProcedureName =
-				vcsType === "azure-devops" ? "debugger-full-azure" : "debugger-full";
-			const debuggerProcedure = this.procedureAnalyzer.getProcedure(
-				debuggerProcedureName,
-			);
+			const debuggerProcedure =
+				this.procedureAnalyzer.getProcedure("debugger-full");
 			if (!debuggerProcedure) {
-				throw new Error(
-					`${debuggerProcedureName} procedure not found in registry`,
-				);
+				throw new Error("debugger-full procedure not found in registry");
 			}
 			finalProcedure = debuggerProcedure;
 			finalClassification = "debugger";
 			console.log(
-				`[EdgeWorker] Using ${debuggerProcedureName} procedure due to debugger label (skipping AI routing)`,
+				`[EdgeWorker] Using debugger-full procedure due to debugger label (skipping AI routing)`,
 			);
 		} else if (hasGraphiteOrchestratorLabels) {
 			// Graphite-orchestrator takes precedence over regular orchestrator when both labels present
@@ -1830,13 +1824,11 @@ export class EdgeWorker extends EventEmitter {
 				`[EdgeWorker] Using orchestrator-full procedure due to orchestrator label (skipping AI routing)`,
 			);
 		} else {
-			// No label override - use AI routing with VCS type for platform-specific procedures
+			// No label override - use AI routing
 			const issueDescription =
 				`${issue.title}\n\n${fullIssue.description || ""}`.trim();
-			const routingDecision = await this.procedureAnalyzer.determineRoutine(
-				issueDescription,
-				vcsType,
-			);
+			const routingDecision =
+				await this.procedureAnalyzer.determineRoutine(issueDescription);
 			finalProcedure = routingDecision.procedure;
 			finalClassification = routingDecision.classification;
 
@@ -4751,7 +4743,7 @@ ${newComment ? `New comment to address:\n${newComment.body}\n\n` : ""}Please ana
 		parts.push(issueContext.prompt);
 		components.push("issue-context");
 
-		// 4. Load and append initial subroutine prompt
+		// 4. Load and append initial subroutine prompt (with VCS-specific variant resolution)
 		const currentSubroutine = this.procedureAnalyzer.getCurrentSubroutine(
 			input.session,
 		);
@@ -4760,6 +4752,7 @@ ${newComment ? `New comment to address:\n${newComment.body}\n\n` : ""}Please ana
 			const subroutinePrompt = await this.loadSubroutinePrompt(
 				currentSubroutine,
 				this.config.linearWorkspaceSlug,
+				input.repository.vcsType,
 			);
 			if (subroutinePrompt) {
 				parts.push(subroutinePrompt);
@@ -4867,23 +4860,33 @@ ${input.userComment}
 	/**
 	 * Load a subroutine prompt file
 	 * Extracted helper to make prompt assembly more readable
+	 *
+	 * @param subroutine - The subroutine definition
+	 * @param workspaceSlug - Optional Linear workspace slug for template substitution
+	 * @param vcsType - Optional VCS type for resolving platform-specific prompt variants
 	 */
 	private async loadSubroutinePrompt(
 		subroutine: SubroutineDefinition,
 		workspaceSlug?: string,
+		vcsType?: VcsType,
 	): Promise<string | null> {
 		// Skip loading for "primary" - it's a placeholder that doesn't have a file
 		if (subroutine.promptPath === "primary") {
 			return null;
 		}
 
+		// Resolve prompt path: use variant if available for the current VCS type
+		let promptPath = subroutine.promptPath;
+		if (vcsType && subroutine.variants?.[vcsType]) {
+			promptPath = subroutine.variants[vcsType];
+			console.log(
+				`[EdgeWorker] Using ${vcsType} variant for ${subroutine.name}: ${promptPath}`,
+			);
+		}
+
 		const __filename = fileURLToPath(import.meta.url);
 		const __dirname = dirname(__filename);
-		const subroutinePromptPath = join(
-			__dirname,
-			"prompts",
-			subroutine.promptPath,
-		);
+		const subroutinePromptPath = join(__dirname, "prompts", promptPath);
 
 		try {
 			let prompt = await readFile(subroutinePromptPath, "utf-8");
@@ -5735,11 +5738,8 @@ ${input.userComment}
 			);
 		} else {
 			// No Orchestrator label - use AI routing based on prompt content
-			// Pass VCS type for platform-specific procedure selection
-			const vcsType = repository.vcsType;
 			const routingDecision = await this.procedureAnalyzer.determineRoutine(
 				promptBody.trim(),
-				vcsType,
 			);
 			selectedProcedure = routingDecision.procedure;
 			finalClassification = routingDecision.classification;
