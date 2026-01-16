@@ -14,3 +14,8 @@ export type {
 	WorkflowMatchResult,
 	WorkflowTriggers,
 } from "./types.js";
+export type {
+	DirectoryParseResult,
+	ValidationResult,
+} from "./WorkflowParser.js";
+export { WorkflowParser } from "./WorkflowParser.js";
