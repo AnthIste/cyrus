@@ -1,0 +1,219 @@
+# yaml-language-server: $schema=./workflow-schema.json
+#
+# Example Cyrus Workflow Definitions
+#
+# This file demonstrates the YAML format for defining custom workflows.
+# Place your workflow definitions in a `workflows.yaml` file or
+# `workflows/` directory in your repository.
+#
+# Workflows define sequences of subroutines that execute for specific
+# types of tasks. Each subroutine references a prompt file and can have
+# various execution options.
+
+version: "1.0"
+
+workflows:
+  # Full development workflow with verification
+  # This is the default workflow for code changes
+  - name: full-development
+    description: >
+      For code changes requiring full verification and PR creation.
+      Includes implementation, testing, changelog updates, and PR creation.
+    triggers:
+      classifications:
+        - code
+      labels:
+        - feature
+        - enhancement
+      keywords:
+        - implement
+        - add feature
+        - create
+        - build
+      examples:
+        - "Add a new API endpoint for user authentication"
+        - "Implement dark mode toggle in settings"
+    priority: 10
+    subroutines:
+      - name: coding-activity
+        prompt_file: prompts/coding-activity.md
+        description: Implementation phase for code changes
+
+      - name: verifications
+        prompt_file: prompts/verifications.md
+        description: Run tests, linting, and type checking
+        validation_loop: true
+        max_iterations: 3
+
+      - name: changelog-update
+        prompt_file: prompts/changelog-update.md
+        description: Update changelog (only if changelog files exist)
+
+      - name: git-commit
+        prompt_file: prompts/git-commit.md
+        description: Stage, commit, and push changes to remote
+
+      - name: gh-pr
+        prompt_file: prompts/gh-pr.md
+        description: Create or update GitHub Pull Request
+
+      - name: concise-summary
+        prompt_file: prompts/concise-summary.md
+        description: Brief summary for Linear
+        single_turn: true
+        suppress_thought_posting: true
+        disallow_tools: true
+
+  # Bug fix workflow with reproduction and approval
+  - name: debugger-full
+    description: >
+      Full debugging workflow with reproduction, fix, and verification.
+      Requires approval after reproducing the issue before implementing fix.
+    triggers:
+      classifications:
+        - debugger
+      labels:
+        - bug
+        - fix
+      keywords:
+        - fix bug
+        - debug
+        - broken
+        - not working
+      examples:
+        - "Fix the login form not submitting on mobile"
+        - "Debug why API returns 500 error on large payloads"
+    priority: 15
+    subroutines:
+      - name: debugger-reproduction
+        prompt_file: prompts/debugger-reproduction.md
+        description: Reproduce bug and perform root cause analysis
+
+      - name: get-approval
+        prompt_file: prompts/get-approval.md
+        description: Request user approval before proceeding
+        single_turn: true
+        requires_approval: true
+
+      - name: debugger-fix
+        prompt_file: prompts/debugger-fix.md
+        description: Implement minimal fix based on approved reproduction
+
+      - name: verifications
+        prompt_file: prompts/verifications.md
+        description: Run tests, linting, and type checking
+        validation_loop: true
+
+      - name: changelog-update
+        prompt_file: prompts/changelog-update.md
+        description: Update changelog with bug fix entry
+
+      - name: git-commit
+        prompt_file: prompts/git-commit.md
+        description: Stage, commit, and push changes
+
+      - name: gh-pr
+        prompt_file: prompts/gh-pr.md
+        description: Create or update Pull Request
+
+      - name: concise-summary
+        prompt_file: prompts/concise-summary.md
+        single_turn: true
+        suppress_thought_posting: true
+        disallow_tools: true
+
+  # Simple question answering workflow
+  - name: simple-question
+    description: >
+      For questions or requests that don't modify the codebase.
+      Investigates the codebase and provides a comprehensive answer.
+    triggers:
+      classifications:
+        - question
+        - transient
+      keywords:
+        - how does
+        - what is
+        - where is
+        - explain
+        - help me understand
+      examples:
+        - "How does the authentication system work?"
+        - "What is the purpose of the EdgeWorker class?"
+    priority: 5
+    subroutines:
+      - name: question-investigation
+        prompt_file: prompts/question-investigation.md
+        description: Gather information needed to answer a question
+
+      - name: question-answer
+        prompt_file: prompts/question-answer.md
+        description: Format final answer to user question
+        single_turn: true
+        suppress_thought_posting: true
+        disallow_tools: true
+
+  # Documentation-only workflow (no verification needed)
+  - name: documentation-edit
+    description: >
+      For documentation/markdown edits that don't require verification.
+      Skips testing phase since no code changes are made.
+    triggers:
+      classifications:
+        - documentation
+      labels:
+        - docs
+        - documentation
+      keywords:
+        - update docs
+        - add documentation
+        - readme
+        - markdown
+    priority: 8
+    subroutines:
+      - name: primary
+        prompt_file: prompts/primary.md
+        description: Make documentation edits
+
+      - name: git-commit
+        prompt_file: prompts/git-commit.md
+        description: Stage, commit, and push changes
+
+      - name: gh-pr
+        prompt_file: prompts/gh-pr.md
+        description: Create or update Pull Request
+
+      - name: concise-summary
+        prompt_file: prompts/concise-summary.md
+        single_turn: true
+        suppress_thought_posting: true
+        disallow_tools: true
+
+  # Custom workflow with restricted tools
+  - name: security-review
+    description: >
+      Security-focused code review workflow.
+      Disallows write operations during analysis phase.
+    triggers:
+      labels:
+        - security
+        - audit
+      keywords:
+        - security review
+        - vulnerability
+        - audit code
+    priority: 20
+    subroutines:
+      - name: security-analysis
+        prompt_file: prompts/security-analysis.md
+        description: Analyze code for security vulnerabilities
+        disallowed_tools:
+          - Write
+          - Edit
+          - Bash
+
+      - name: security-report
+        prompt_file: prompts/security-report.md
+        description: Generate security findings report
+        single_turn: true
+        disallow_tools: true
