@@ -7,7 +7,7 @@ This changelog documents internal development changes, refactors, tooling update
 ### Added
 - Added TypeScript types and JSON Schema for YAML workflow definitions, enabling external workflow configuration ([RUB-67](https://linear.app/rbakker/issue/RUB-67), [#3](https://github.com/AnthIste/cyrus/pull/3))
 - Added WorkflowParser class for parsing and validating YAML workflow files and converting them to internal ProcedureDefinition format ([RUB-68](https://linear.app/rbakker/issue/RUB-68), [#4](https://github.com/AnthIste/cyrus/pull/4))
-- Added WorkflowLoader class for discovering and loading workflows from local directories or Git repositories with caching support ([RUB-69](https://linear.app/rbakker/issue/RUB-69), [#5](https://github.com/AnthIste/cyrus/pull/5))
+- Added WorkflowLoader class for discovering and loading workflows from local directories or Git repositories ([RUB-69](https://linear.app/rbakker/issue/RUB-69), [#5](https://github.com/AnthIste/cyrus/pull/5))
 
 ## [0.2.13] - 2026-01-15
 
