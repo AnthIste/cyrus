@@ -1,3 +1,4 @@
+import { resolveCredentialsForRepository } from "cyrus-core";
 import { BaseCommand } from "./ICommand.js";
 
 /**
@@ -49,12 +50,20 @@ export class CheckTokensCommand extends BaseCommand {
 
 		for (const repo of config.repositories) {
 			process.stdout.write(`${repo.name} (${repo.linearWorkspaceName}): `);
-			const result = await checkLinearToken(repo.linearToken);
+			try {
+				const credentials = resolveCredentialsForRepository(
+					repo,
+					config.workspaceCredentials,
+				);
+				const result = await checkLinearToken(credentials.linearToken);
 
-			if (result.valid) {
-				console.log("✅ Valid");
-			} else {
-				console.log(`❌ Invalid - ${result.error}`);
+				if (result.valid) {
+					console.log("✅ Valid");
+				} else {
+					console.log(`❌ Invalid - ${result.error}`);
+				}
+			} catch (error) {
+				console.log(`❌ ${(error as Error).message}`);
 			}
 		}
 	}

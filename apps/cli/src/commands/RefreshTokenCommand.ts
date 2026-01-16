@@ -1,4 +1,8 @@
 import http from "node:http";
+import {
+	type RepositoryConfig,
+	resolveCredentialsForRepository,
+} from "cyrus-core";
 import open from "open";
 import { CLIPrompts } from "../ui/CLIPrompts.js";
 import { BaseCommand } from "./ICommand.js";
@@ -50,16 +54,40 @@ export class RefreshTokenCommand extends BaseCommand {
 
 		// Show repositories with their token status
 		console.log("Checking current token status...\n");
-		const tokenStatuses: Array<{ repo: any; valid: boolean }> = [];
+		const tokenStatuses: Array<{
+			repo: RepositoryConfig;
+			valid: boolean;
+			resolvedToken?: string;
+			error?: string;
+		}> = [];
 
 		for (const repo of config.repositories) {
-			const result = await checkLinearToken(repo.linearToken);
-			tokenStatuses.push({ repo, valid: result.valid });
-			console.log(
-				`${tokenStatuses.length}. ${repo.name} (${repo.linearWorkspaceName}): ${
-					result.valid ? "✅ Valid" : "❌ Invalid"
-				}`,
-			);
+			try {
+				const credentials = resolveCredentialsForRepository(
+					repo,
+					config.workspaceCredentials,
+				);
+				const result = await checkLinearToken(credentials.linearToken);
+				tokenStatuses.push({
+					repo,
+					valid: result.valid,
+					resolvedToken: credentials.linearToken,
+				});
+				console.log(
+					`${tokenStatuses.length}. ${repo.name} (${repo.linearWorkspaceName || credentials.linearWorkspaceName}): ${
+						result.valid ? "✅ Valid" : "❌ Invalid"
+					}`,
+				);
+			} catch (error) {
+				tokenStatuses.push({
+					repo,
+					valid: false,
+					error: (error as Error).message,
+				});
+				console.log(
+					`${tokenStatuses.length}. ${repo.name}: ❌ ${(error as Error).message}`,
+				);
+			}
 		}
 
 		// Ask which token to refresh
@@ -167,27 +195,36 @@ export class RefreshTokenCommand extends BaseCommand {
 				continue;
 			}
 
-			// Update the config - update ALL repositories that had the same old token
-			const oldToken = repo.linearToken;
-			let updatedCount = 0;
+			// Update the config - primarily update workspaceCredentials
+			const workspaceId = repo.linearWorkspaceId;
 
 			this.app.config.update((cfg) => {
-				for (let i = 0; i < cfg.repositories.length; i++) {
-					const currentRepo = cfg.repositories[i];
-					if (currentRepo && currentRepo.linearToken === oldToken) {
-						currentRepo.linearToken = newToken;
-						updatedCount++;
-						this.logSuccess(`Updated token for ${currentRepo.name}`);
+				// Update workspace credentials (primary source)
+				if (cfg.workspaceCredentials) {
+					const workspaceCred = cfg.workspaceCredentials.find(
+						(w) => w.linearWorkspaceId === workspaceId,
+					);
+					if (workspaceCred) {
+						workspaceCred.linearToken = newToken;
+						this.logSuccess(
+							`Updated workspace credentials for ${workspaceCred.linearWorkspaceName || workspaceId}`,
+						);
 					}
 				}
+
+				// Also update any repositories that have explicit token overrides for this workspace
+				for (const currentRepo of cfg.repositories) {
+					if (
+						currentRepo.linearWorkspaceId === workspaceId &&
+						currentRepo.linearToken
+					) {
+						currentRepo.linearToken = newToken;
+						this.logSuccess(`Updated explicit token for ${currentRepo.name}`);
+					}
+				}
+
 				return cfg;
 			});
-
-			if (updatedCount > 1) {
-				console.log(
-					`\n📝 Updated ${updatedCount} repositories that shared the same token`,
-				);
-			}
 		}
 
 		this.logSuccess("Configuration saved");

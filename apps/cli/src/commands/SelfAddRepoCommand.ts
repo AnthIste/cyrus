@@ -179,6 +179,7 @@ export class SelfAddRepoCommand extends BaseCommand {
 			}
 
 			// Generate UUID and add to config
+			// Only set linearWorkspaceId - credentials are inherited from workspaceCredentials
 			const id = randomUUID();
 
 			config.repositories.push({
@@ -188,9 +189,9 @@ export class SelfAddRepoCommand extends BaseCommand {
 				baseBranch: DEFAULT_BASE_BRANCH,
 				workspaceBaseDir: resolve(this.app.cyrusHome, DEFAULT_WORKTREES_DIR),
 				linearWorkspaceId: selectedWorkspace.linearWorkspaceId,
-				linearWorkspaceName: selectedWorkspace.linearWorkspaceName,
-				linearToken: selectedWorkspace.linearToken,
-				linearRefreshToken: selectedWorkspace.linearRefreshToken,
+				// Note: linearToken and linearRefreshToken are intentionally NOT set here.
+				// Credentials are inherited from workspaceCredentials at runtime.
+				// Repository-level credentials are only for explicit overrides.
 				isActive: true,
 			});
 

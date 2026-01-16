@@ -295,10 +295,10 @@ describe("SelfAddRepoCommand", () => {
 			const addedRepo = writtenConfig.repositories.find(
 				(r: any) => r.id === "generated-uuid-123",
 			);
+			// Only linearWorkspaceId is set - credentials are inherited from workspaceCredentials at runtime
 			expect(addedRepo.linearWorkspaceId).toBe("ws-123");
-			expect(addedRepo.linearWorkspaceName).toBe("Test Workspace");
-			expect(addedRepo.linearToken).toBe("workspace-token");
-			expect(addedRepo.linearRefreshToken).toBe("workspace-refresh");
+			expect(addedRepo.linearToken).toBeUndefined();
+			expect(addedRepo.linearRefreshToken).toBeUndefined();
 		});
 
 		it("should prefer workspaceCredentials over repository credentials for the same workspace", async () => {
@@ -336,10 +336,10 @@ describe("SelfAddRepoCommand", () => {
 			const addedRepo = writtenConfig.repositories.find(
 				(r: any) => r.id === "generated-uuid-123",
 			);
-			// Should use the workspaceCredentials values (newer/preferred source)
-			expect(addedRepo.linearWorkspaceName).toBe("New Workspace Name");
-			expect(addedRepo.linearToken).toBe("new-token");
-			expect(addedRepo.linearRefreshToken).toBe("new-refresh");
+			// New repos only get linearWorkspaceId - credentials inherited at runtime
+			expect(addedRepo.linearWorkspaceId).toBe("ws-123");
+			expect(addedRepo.linearToken).toBeUndefined();
+			expect(addedRepo.linearRefreshToken).toBeUndefined();
 		});
 	});
 
@@ -419,8 +419,10 @@ describe("SelfAddRepoCommand", () => {
 			const addedRepo = writtenConfig.repositories.find(
 				(r: any) => r.id === "generated-uuid-123",
 			);
+			// New repos only get linearWorkspaceId - credentials inherited at runtime
 			expect(addedRepo.linearWorkspaceId).toBe("ws-2");
-			expect(addedRepo.linearToken).toBe("token-2");
+			expect(addedRepo.linearToken).toBeUndefined();
+			expect(addedRepo.linearRefreshToken).toBeUndefined();
 		});
 
 		it("should use workspace from command line argument", async () => {
@@ -637,6 +639,7 @@ describe("SelfAddRepoCommand", () => {
 				(r: any) => r.id === "generated-uuid-123",
 			);
 
+			// New repos only get linearWorkspaceId - credentials inherited at runtime
 			expect(addedRepo).toEqual({
 				id: "generated-uuid-123",
 				name: "new-repo",
@@ -644,9 +647,6 @@ describe("SelfAddRepoCommand", () => {
 				baseBranch: "main",
 				workspaceBaseDir: "/home/user/.cyrus/worktrees",
 				linearWorkspaceId: "ws-123",
-				linearWorkspaceName: "Test Workspace",
-				linearToken: "existing-token",
-				linearRefreshToken: "existing-refresh",
 				isActive: true,
 			});
 		});

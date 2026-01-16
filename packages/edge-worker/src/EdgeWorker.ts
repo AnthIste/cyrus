@@ -37,6 +37,7 @@ import type {
 	IssueMinimal,
 	IssueUnassignedWebhook,
 	RepositoryConfig,
+	ResolvedLinearCredentials,
 	SerializableEdgeWorkerState,
 	SerializedCyrusAgentSession,
 	SerializedCyrusAgentSessionEntry,
@@ -44,6 +45,7 @@ import type {
 	WebhookAgentSession,
 	WebhookComment,
 	WebhookIssue,
+	WorkspaceCredentials,
 } from "cyrus-core";
 import {
 	CLIIssueTrackerService,
@@ -56,6 +58,7 @@ import {
 	isIssueNewCommentWebhook,
 	isIssueUnassignedWebhook,
 	PersistenceManager,
+	resolveCredentialsForRepository,
 	resolvePath,
 } from "cyrus-core";
 import { GeminiRunner } from "cyrus-gemini-runner";
@@ -108,6 +111,7 @@ export declare interface EdgeWorker {
 export class EdgeWorker extends EventEmitter {
 	private config: EdgeWorkerConfig;
 	private repositories: Map<string, RepositoryConfig> = new Map(); // repository 'id' (internal, stored in config.json) mapped to the full repo config
+	private workspaceCredentials: WorkspaceCredentials[] = []; // Workspace-level credentials (primary source)
 	private agentSessionManagers: Map<string, AgentSessionManager> = new Map(); // Maps repository ID to AgentSessionManager, which manages agent runners for a repo
 	private issueTrackers: Map<string, IIssueTrackerService> = new Map(); // one issue tracker per 'repository'
 	private linearEventTransport: LinearEventTransport | null = null; // Single event transport for webhook delivery
@@ -126,6 +130,17 @@ export class EdgeWorker extends EventEmitter {
 	private activeWebhookCount = 0; // Track number of webhooks currently being processed
 	/** Handler for AskUserQuestion tool invocations via Linear select signal */
 	private askUserQuestionHandler: AskUserQuestionHandler;
+
+	/**
+	 * Resolves Linear credentials for a repository.
+	 * Uses workspace-level credentials as the primary source, with optional
+	 * repository-level overrides.
+	 */
+	private getCredentialsForRepository(
+		repo: RepositoryConfig,
+	): ResolvedLinearCredentials {
+		return resolveCredentialsForRepository(repo, this.workspaceCredentials);
+	}
 
 	constructor(config: EdgeWorkerConfig) {
 		super();
@@ -224,6 +239,10 @@ export class EdgeWorker extends EventEmitter {
 			skipTunnel,
 		);
 
+		// Store workspace credentials for credential resolution
+		// These are the primary source of credentials; repo-level credentials are optional overrides
+		this.workspaceCredentials = (config as any).workspaceCredentials || [];
+
 		// Initialize repositories with path resolution
 		for (const repo of config.repositories) {
 			if (repo.isActive !== false) {
@@ -247,6 +266,9 @@ export class EdgeWorker extends EventEmitter {
 
 				this.repositories.set(repo.id, resolvedRepo);
 
+				// Resolve credentials for this repository (workspace-level with optional repo override)
+				const credentials = this.getCredentialsForRepository(resolvedRepo);
+
 				// Create issue tracker for this repository's workspace
 				const issueTracker =
 					this.config.platform === "cli"
@@ -257,7 +279,7 @@ export class EdgeWorker extends EventEmitter {
 							})()
 						: new LinearIssueTrackerService(
 								new LinearClient({
-									accessToken: repo.linearToken,
+									accessToken: credentials.linearToken,
 								}),
 								this.buildOAuthConfig(resolvedRepo),
 							);
@@ -944,6 +966,9 @@ export class EdgeWorker extends EventEmitter {
 				`📊 Repository changes detected: ${changes.added.length} added, ${changes.modified.length} modified, ${changes.removed.length} removed`,
 			);
 
+			// Update workspace credentials from config
+			this.workspaceCredentials = (newConfig as any).workspaceCredentials || [];
+
 			// Apply changes incrementally
 			await this.removeDeletedRepositories(changes.removed);
 			await this.updateModifiedRepositories(changes.modified);
@@ -1096,6 +1121,9 @@ export class EdgeWorker extends EventEmitter {
 				// Add to internal map
 				this.repositories.set(repo.id, resolvedRepo);
 
+				// Resolve credentials for this repository (workspace-level with optional repo override)
+				const credentials = this.getCredentialsForRepository(resolvedRepo);
+
 				// Create issue tracker with OAuth config for token refresh
 				const issueTracker =
 					this.config.platform === "cli"
@@ -1106,7 +1134,7 @@ export class EdgeWorker extends EventEmitter {
 							})()
 						: new LinearIssueTrackerService(
 								new LinearClient({
-									accessToken: repo.linearToken,
+									accessToken: credentials.linearToken,
 								}),
 								this.buildOAuthConfig(resolvedRepo),
 							);
@@ -1231,13 +1259,18 @@ export class EdgeWorker extends EventEmitter {
 				// Update stored config
 				this.repositories.set(repo.id, resolvedRepo);
 
-				// If token changed, update the issue tracker's client
-				if (oldRepo.linearToken !== repo.linearToken) {
+				// Resolve credentials for both old and new config to detect token changes
+				// (token might change from workspace credentials even if repo config unchanged)
+				const oldCredentials = this.getCredentialsForRepository(oldRepo);
+				const newCredentials = this.getCredentialsForRepository(resolvedRepo);
+
+				// If resolved token changed, update the issue tracker's client
+				if (oldCredentials.linearToken !== newCredentials.linearToken) {
 					console.log(`  🔑 Token changed, updating client`);
 					const issueTracker = this.issueTrackers.get(repo.id);
 					if (issueTracker) {
 						(issueTracker as LinearIssueTrackerService).setAccessToken(
-							repo.linearToken,
+							newCredentials.linearToken,
 						);
 					}
 				}
@@ -2367,11 +2400,12 @@ export class EdgeWorker extends EventEmitter {
 			).length;
 
 			// Download new attachments from the comment
+			const credentials = this.getCredentialsForRepository(repository);
 			const downloadResult = comment
 				? await this.downloadCommentAttachments(
 						comment.body,
 						attachmentsDir,
-						repository.linearToken,
+						credentials.linearToken,
 						existingAttachmentCount,
 					)
 				: {
@@ -3995,6 +4029,7 @@ ${newComment ? `New comment to address:\n${newComment.body}\n\n` : ""}Please ana
 			}
 
 			// Download attachments up to the limit
+			const credentials = this.getCredentialsForRepository(repository);
 			for (const url of allUrls) {
 				if (attachmentCount >= maxAttachments) {
 					skippedCount++;
@@ -4008,7 +4043,7 @@ ${newComment ? `New comment to address:\n${newComment.body}\n\n` : ""}Please ana
 				const result = await this.downloadAttachment(
 					url,
 					tempPath,
-					repository.linearToken,
+					credentials.linearToken,
 				);
 
 				if (result.success) {
@@ -4371,17 +4406,20 @@ ${newComment ? `New comment to address:\n${newComment.body}\n\n` : ""}Please ana
 		repository: RepositoryConfig,
 		parentSessionId?: string,
 	): Record<string, McpServerConfig> {
-		// Always inject the Linear MCP servers with the repository's token
+		// Resolve credentials for this repository
+		const credentials = this.getCredentialsForRepository(repository);
+
+		// Always inject the Linear MCP servers with the resolved token
 		// https://linear.app/docs/mcp
 		const mcpConfig: Record<string, McpServerConfig> = {
 			linear: {
 				type: "http",
 				url: "https://mcp.linear.app/mcp",
 				headers: {
-					Authorization: `Bearer ${repository.linearToken}`,
+					Authorization: `Bearer ${credentials.linearToken}`,
 				},
 			},
-			"cyrus-tools": createCyrusToolsServer(repository.linearToken, {
+			"cyrus-tools": createCyrusToolsServer(credentials.linearToken, {
 				parentSessionId,
 				onSessionCreated: (childSessionId, parentId) => {
 					console.log(
@@ -6232,7 +6270,10 @@ ${input.userComment}
 			return undefined;
 		}
 
-		if (!repo.linearRefreshToken) {
+		// Resolve credentials to get refresh token (may come from workspace credentials)
+		const credentials = this.getCredentialsForRepository(repo);
+
+		if (!credentials.linearRefreshToken) {
 			console.warn(
 				`[EdgeWorker] No refresh token for repository ${repo.id}, token refresh disabled`,
 			);
@@ -6240,23 +6281,38 @@ ${input.userComment}
 		}
 
 		const workspaceId = repo.linearWorkspaceId;
-		const workspaceName = repo.linearWorkspaceName || workspaceId;
+		const workspaceName =
+			credentials.linearWorkspaceName ||
+			repo.linearWorkspaceName ||
+			workspaceId;
 
 		return {
 			clientId,
 			clientSecret,
-			refreshToken: repo.linearRefreshToken,
+			refreshToken: credentials.linearRefreshToken,
 			workspaceId,
 			onTokenRefresh: async (tokens) => {
-				// Update repository config state (for EdgeWorker's internal tracking)
+				// Update workspace credentials (primary source)
+				const workspaceCred = this.workspaceCredentials.find(
+					(w) => w.linearWorkspaceId === workspaceId,
+				);
+				if (workspaceCred) {
+					workspaceCred.linearToken = tokens.accessToken;
+					workspaceCred.linearRefreshToken = tokens.refreshToken;
+				}
+
+				// Also update any repository-level overrides for backward compatibility
 				for (const [, repository] of this.repositories) {
-					if (repository.linearWorkspaceId === workspaceId) {
+					if (
+						repository.linearWorkspaceId === workspaceId &&
+						repository.linearToken
+					) {
 						repository.linearToken = tokens.accessToken;
 						repository.linearRefreshToken = tokens.refreshToken;
 					}
 				}
 
-				// Persist tokens to config.json
+				// Persist tokens to config.json (updates both workspaceCredentials and repositories)
 				await this.saveOAuthTokens({
 					linearToken: tokens.accessToken,
 					linearRefreshToken: tokens.refreshToken,
@@ -6268,7 +6324,9 @@ ${input.userComment}
 	}
 
 	/**
-	 * Save OAuth tokens to config.json
+	 * Save OAuth tokens to config.json.
+	 * Updates workspaceCredentials as the primary source, and also updates
+	 * any repositories that have explicit token overrides for backward compatibility.
 	 */
 	private async saveOAuthTokens(tokens: {
 		linearToken: string;
@@ -6285,10 +6343,39 @@ ${input.userComment}
 			const configContent = await readFile(this.configPath, "utf-8");
 			const config = JSON.parse(configContent);
 
-			// Find and update all repositories with this workspace ID
+			// Update workspaceCredentials (primary source)
+			if (!config.workspaceCredentials) {
+				config.workspaceCredentials = [];
+			}
+			const workspaceCred = config.workspaceCredentials.find(
+				(w: any) => w.linearWorkspaceId === tokens.linearWorkspaceId,
+			);
+			if (workspaceCred) {
+				workspaceCred.linearToken = tokens.linearToken;
+				if (tokens.linearRefreshToken) {
+					workspaceCred.linearRefreshToken = tokens.linearRefreshToken;
+				}
+				if (tokens.linearWorkspaceName) {
+					workspaceCred.linearWorkspaceName = tokens.linearWorkspaceName;
+				}
+			} else {
+				// Add new workspace credentials if not found
+				config.workspaceCredentials.push({
+					linearWorkspaceId: tokens.linearWorkspaceId,
+					linearWorkspaceName: tokens.linearWorkspaceName,
+					linearToken: tokens.linearToken,
+					linearRefreshToken: tokens.linearRefreshToken,
+				});
+			}
+
+			// Also update repositories that have explicit token overrides (for backward compatibility)
 			if (config.repositories && Array.isArray(config.repositories)) {
 				for (const repo of config.repositories) {
-					if (repo.linearWorkspaceId === tokens.linearWorkspaceId) {
+					// Only update if repo has explicit linearToken set (is an override)
+					if (
+						repo.linearWorkspaceId === tokens.linearWorkspaceId &&
+						repo.linearToken
+					) {
 						repo.linearToken = tokens.linearToken;
 						if (tokens.linearRefreshToken) {
 							repo.linearRefreshToken = tokens.linearRefreshToken;
