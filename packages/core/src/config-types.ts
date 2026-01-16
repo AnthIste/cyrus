@@ -33,6 +33,20 @@ export type OAuthCallbackHandler = (
 ) => Promise<void>;
 
 /**
+ * Version control system type for repository configuration
+ */
+export type VcsType = "github" | "azure-devops";
+
+/**
+ * Azure DevOps specific configuration
+ */
+export interface AzureDevOpsConfig {
+	organization: string; // Azure DevOps organization name (e.g., "myorg")
+	project: string; // Azure DevOps project name (e.g., "MyProject")
+	repository: string; // Azure DevOps repository name (e.g., "my-repo")
+}
+
+/**
  * Configuration for a single repository/workspace pair
  */
 export interface RepositoryConfig {
@@ -44,6 +58,11 @@ export interface RepositoryConfig {
 	repositoryPath: string; // Local git repository path
 	baseBranch: string; // Branch to create worktrees from (main, master, etc.)
 	githubUrl?: string; // GitHub repository URL (e.g., "https://github.com/org/repo") - used for Linear select signal
+
+	// Version control system configuration
+	vcsType?: VcsType; // Version control platform ("github" | "azure-devops"), defaults to "github"
+	repoUrl?: string; // Generic repository URL (used for routing context, fallback to githubUrl)
+	azureDevOps?: AzureDevOpsConfig; // Azure DevOps specific configuration
 
 	// Linear configuration
 	linearWorkspaceId: string; // Linear workspace/team ID

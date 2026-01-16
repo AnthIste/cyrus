@@ -5,10 +5,18 @@
  * which procedure (sequence of subroutines) should be executed.
  */
 
-import type { CyrusAgentSession, ISimpleAgentRunner } from "cyrus-core";
+import type {
+	CyrusAgentSession,
+	ISimpleAgentRunner,
+	VcsType,
+} from "cyrus-core";
 import { SimpleGeminiRunner } from "cyrus-gemini-runner";
 import { SimpleClaudeRunner } from "cyrus-simple-agent-runner";
-import { getProcedureForClassification, PROCEDURES } from "./registry.js";
+import {
+	getProcedureForClassification,
+	getProcedureForClassificationWithVcs,
+	PROCEDURES,
+} from "./registry.js";
 import type {
 	ProcedureAnalysisDecision,
 	ProcedureDefinition,
@@ -136,9 +144,13 @@ IMPORTANT: Respond with ONLY the classification word, nothing else.`;
 
 	/**
 	 * Analyze a request and determine which procedure to use
+	 *
+	 * @param requestText - The request text to classify
+	 * @param vcsType - Optional VCS type to select platform-specific procedures
 	 */
 	async determineRoutine(
 		requestText: string,
+		vcsType?: VcsType,
 	): Promise<ProcedureAnalysisDecision> {
 		try {
 			// Classify the request using analysis runner
@@ -148,8 +160,10 @@ IMPORTANT: Respond with ONLY the classification word, nothing else.`;
 
 			const classification = result.response;
 
-			// Get procedure name for this classification
-			const procedureName = getProcedureForClassification(classification);
+			// Get procedure name for this classification (considering VCS platform)
+			const procedureName = vcsType
+				? getProcedureForClassificationWithVcs(classification, vcsType)
+				: getProcedureForClassification(classification);
 
 			// Get procedure definition
 			const procedure = this.procedures.get(procedureName);
@@ -158,24 +172,32 @@ IMPORTANT: Respond with ONLY the classification word, nothing else.`;
 				throw new Error(`Procedure "${procedureName}" not found in registry`);
 			}
 
+			const platformNote =
+				vcsType && vcsType !== "github" ? ` (platform: ${vcsType})` : "";
+
 			return {
 				classification,
 				procedure,
-				reasoning: `Classified as "${classification}" → using procedure "${procedureName}"`,
+				reasoning: `Classified as "${classification}" → using procedure "${procedureName}"${platformNote}`,
 			};
 		} catch (error) {
-			// Fallback to full-development on error
+			// Fallback to full-development on error (use platform-specific variant if available)
 			console.log("[ProcedureAnalyzer] Error during analysis:", error);
-			const fallbackProcedure = this.procedures.get("full-development");
+			const fallbackProcedureName = vcsType
+				? getProcedureForClassificationWithVcs("code", vcsType)
+				: "full-development";
+			const fallbackProcedure = this.procedures.get(fallbackProcedureName);
 
 			if (!fallbackProcedure) {
-				throw new Error("Fallback procedure 'full-development' not found");
+				throw new Error(
+					`Fallback procedure '${fallbackProcedureName}' not found`,
+				);
 			}
 
 			return {
 				classification: "code",
 				procedure: fallbackProcedure,
-				reasoning: `Fallback to full-development due to error: ${error}`,
+				reasoning: `Fallback to ${fallbackProcedureName} due to error: ${error}`,
 			};
 		}
 	}

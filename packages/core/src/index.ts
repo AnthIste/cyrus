@@ -34,10 +34,12 @@ export type {
 
 // Configuration types
 export type {
+	AzureDevOpsConfig,
 	EdgeConfig,
 	EdgeWorkerConfig,
 	OAuthCallbackHandler,
 	RepositoryConfig,
+	VcsType,
 } from "./config-types.js";
 export { resolvePath } from "./config-types.js";
 

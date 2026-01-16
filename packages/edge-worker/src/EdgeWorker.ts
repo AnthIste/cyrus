@@ -1784,17 +1784,26 @@ export class EdgeWorker extends EventEmitter {
 		let finalProcedure: ProcedureDefinition;
 		let finalClassification: RequestClassification;
 
+		// Get VCS type for platform-specific procedure selection
+		const vcsType = repository.vcsType;
+
 		// If labels indicate a specific procedure, use that instead of AI routing
 		if (hasDebuggerLabel) {
-			const debuggerProcedure =
-				this.procedureAnalyzer.getProcedure("debugger-full");
+			// Get platform-specific debugger procedure
+			const debuggerProcedureName =
+				vcsType === "azure-devops" ? "debugger-full-azure" : "debugger-full";
+			const debuggerProcedure = this.procedureAnalyzer.getProcedure(
+				debuggerProcedureName,
+			);
 			if (!debuggerProcedure) {
-				throw new Error("debugger-full procedure not found in registry");
+				throw new Error(
+					`${debuggerProcedureName} procedure not found in registry`,
+				);
 			}
 			finalProcedure = debuggerProcedure;
 			finalClassification = "debugger";
 			console.log(
-				`[EdgeWorker] Using debugger-full procedure due to debugger label (skipping AI routing)`,
+				`[EdgeWorker] Using ${debuggerProcedureName} procedure due to debugger label (skipping AI routing)`,
 			);
 		} else if (hasGraphiteOrchestratorLabels) {
 			// Graphite-orchestrator takes precedence over regular orchestrator when both labels present
@@ -1821,11 +1830,13 @@ export class EdgeWorker extends EventEmitter {
 				`[EdgeWorker] Using orchestrator-full procedure due to orchestrator label (skipping AI routing)`,
 			);
 		} else {
-			// No label override - use AI routing
+			// No label override - use AI routing with VCS type for platform-specific procedures
 			const issueDescription =
 				`${issue.title}\n\n${fullIssue.description || ""}`.trim();
-			const routingDecision =
-				await this.procedureAnalyzer.determineRoutine(issueDescription);
+			const routingDecision = await this.procedureAnalyzer.determineRoutine(
+				issueDescription,
+				vcsType,
+			);
 			finalProcedure = routingDecision.procedure;
 			finalClassification = routingDecision.classification;
 
@@ -3066,9 +3077,15 @@ export class EdgeWorker extends EventEmitter {
 			const routingMethods: string[] = [];
 
 			// Description tag routing (always available)
-			const repoIdentifier = repo.githubUrl
-				? repo.githubUrl.replace("https://github.com/", "")
-				: repo.name;
+			// Use repoUrl, then fall back to githubUrl or repo name
+			const repoIdentifier = repo.repoUrl
+				? repo.repoUrl.replace(
+						/^https?:\/\/(github\.com|dev\.azure\.com)\//,
+						"",
+					)
+				: repo.githubUrl
+					? repo.githubUrl.replace("https://github.com/", "")
+					: repo.name;
 			routingMethods.push(
 				`    - Description tag: Add \`[repo=${repoIdentifier}]\` to sub-issue description`,
 			);
@@ -3097,8 +3114,23 @@ export class EdgeWorker extends EventEmitter {
 			const currentMarker =
 				repo.id === currentRepository.id ? " (current)" : "";
 
+			// Determine VCS type and URL
+			const vcsType = repo.vcsType || "github";
+			const repoUrl = repo.repoUrl || repo.githubUrl || "N/A";
+
+			// Build Azure DevOps context if available
+			const azureContext = repo.azureDevOps
+				? `
+    <azure_devops>
+      <organization>${repo.azureDevOps.organization}</organization>
+      <project>${repo.azureDevOps.project}</project>
+      <repository>${repo.azureDevOps.repository}</repository>
+    </azure_devops>`
+				: "";
+
 			return `  <repository name="${repo.name}"${currentMarker}>
-    <github_url>${repo.githubUrl || "N/A"}</github_url>
+    <vcs_type>${vcsType}</vcs_type>
+    <repo_url>${repoUrl}</repo_url>${azureContext}
     <routing_methods>
 ${routingMethods.join("\n")}
     </routing_methods>
@@ -5703,8 +5735,11 @@ ${input.userComment}
 			);
 		} else {
 			// No Orchestrator label - use AI routing based on prompt content
+			// Pass VCS type for platform-specific procedure selection
+			const vcsType = repository.vcsType;
 			const routingDecision = await this.procedureAnalyzer.determineRoutine(
 				promptBody.trim(),
+				vcsType,
 			);
 			selectedProcedure = routingDecision.procedure;
 			finalClassification = routingDecision.classification;

@@ -182,7 +182,8 @@ For reliable cross-repository routing, prefer Description Tags as they are expli
 
 <available_repositories>
   <repository name="Frontend App" (current)>
-    <github_url>https://github.com/myorg/frontend-app</github_url>
+    <vcs_type>github</vcs_type>
+    <repo_url>https://github.com/myorg/frontend-app</repo_url>
     <routing_methods>
     - Description tag: Add \`[repo=myorg/frontend-app]\` to sub-issue description
     - Routing labels: "frontend", "ui"
@@ -190,7 +191,8 @@ For reliable cross-repository routing, prefer Description Tags as they are expli
     </routing_methods>
   </repository>
   <repository name="Backend API">
-    <github_url>https://github.com/myorg/backend-api</github_url>
+    <vcs_type>github</vcs_type>
+    <repo_url>https://github.com/myorg/backend-api</repo_url>
     <routing_methods>
     - Description tag: Add \`[repo=myorg/backend-api]\` to sub-issue description
     - Routing labels: "backend", "api"
