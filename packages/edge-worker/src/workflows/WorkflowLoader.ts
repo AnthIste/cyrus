@@ -7,7 +7,6 @@
  */
 
 import { execSync } from "node:child_process";
-import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -96,18 +95,35 @@ export class WorkflowLoader {
 	}
 
 	/**
-	 * Generate a deterministic directory name for a Git repository
+	 * Extract repository name from a Git URL
+	 *
+	 * Examples:
+	 * - "https://github.com/org/repo.git" -> "repo"
+	 * - "git@github.com:org/repo.git" -> "repo"
+	 * - "https://github.com/org/my-workflows.git" -> "my-workflows"
+	 */
+	private extractRepoName(source: string): string {
+		// Remove trailing .git if present
+		let name = source.replace(/\.git$/, "");
+
+		// Handle SSH URLs (git@github.com:org/repo)
+		if (name.includes(":") && name.startsWith("git@")) {
+			name = name.split(":").pop() || name;
+		}
+
+		// Get the last path segment (repo name)
+		name = name.split("/").pop() || name;
+
+		return name;
+	}
+
+	/**
+	 * Get the working directory for a Git repository
+	 * Uses ~/.cyrus/workflows/{repo-name} to match Cyrus's pattern
 	 */
 	private getGitWorkingDirectory(): string {
-		const hash = crypto
-			.createHash("sha256")
-			.update(this.config.source)
-			.digest("hex")
-			.substring(0, 16);
-		const safeName = this.config.source
-			.replace(/[^a-zA-Z0-9]/g, "-")
-			.substring(0, 32);
-		return path.join(os.tmpdir(), `cyrus-workflows-${safeName}-${hash}`);
+		const repoName = this.extractRepoName(this.config.source);
+		return path.join(os.homedir(), ".cyrus", "workflows", repoName);
 	}
 
 	/**
