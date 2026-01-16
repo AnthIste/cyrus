@@ -14,3 +14,10 @@ export type {
 	WorkflowMatchResult,
 	WorkflowTriggers,
 } from "./types.js";
+export type { WorkflowLoaderConfig } from "./WorkflowLoader.js";
+export { WorkflowLoader } from "./WorkflowLoader.js";
+export type {
+	DirectoryParseResult,
+	ValidationResult,
+} from "./WorkflowParser.js";
+export { WorkflowParser } from "./WorkflowParser.js";
