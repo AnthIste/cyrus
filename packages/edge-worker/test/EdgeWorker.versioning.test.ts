@@ -31,7 +31,13 @@ vi.mock("@linear/sdk", async (importOriginal) => {
 });
 vi.mock("../src/SharedApplicationServer.js");
 vi.mock("../src/AgentSessionManager.js");
-vi.mock("cyrus-core");
+vi.mock("cyrus-core", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("cyrus-core")>();
+	return {
+		...actual,
+		// Keep the actual resolveCredentialsForRepository implementation
+	};
+});
 vi.mock("file-type");
 
 describe("EdgeWorker - Version Tag Extraction", () => {

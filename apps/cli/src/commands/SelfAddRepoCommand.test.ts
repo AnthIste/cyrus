@@ -253,7 +253,7 @@ describe("SelfAddRepoCommand", () => {
 			);
 		});
 
-		it("should error when repositories array is empty", async () => {
+		it("should error when repositories array is empty and no workspaceCredentials", async () => {
 			mocks.mockReadFileSync.mockReturnValue(
 				JSON.stringify({
 					repositories: [],
@@ -264,6 +264,82 @@ describe("SelfAddRepoCommand", () => {
 				command.execute(["https://github.com/user/new-repo.git"]),
 			).rejects.toThrow("process.exit called");
 			expect(mockExit).toHaveBeenCalledWith(1);
+			expect(mockApp.logger.error).toHaveBeenCalledWith(
+				expect.stringContaining("No Linear credentials found"),
+			);
+		});
+
+		it("should use workspaceCredentials when repositories array is empty", async () => {
+			mocks.mockReadFileSync.mockReturnValue(
+				JSON.stringify({
+					repositories: [],
+					workspaceCredentials: [
+						{
+							linearWorkspaceId: "ws-123",
+							linearWorkspaceName: "Test Workspace",
+							linearToken: "workspace-token",
+							linearRefreshToken: "workspace-refresh",
+						},
+					],
+				}),
+			);
+
+			await expect(
+				command.execute(["https://github.com/user/new-repo.git"]),
+			).rejects.toThrow("process.exit called");
+			expect(mockExit).toHaveBeenCalledWith(0);
+
+			const writtenConfig = JSON.parse(
+				mocks.mockWriteFileSync.mock.calls[0][1],
+			);
+			const addedRepo = writtenConfig.repositories.find(
+				(r: any) => r.id === "generated-uuid-123",
+			);
+			// Only linearWorkspaceId is set - credentials are inherited from workspaceCredentials at runtime
+			expect(addedRepo.linearWorkspaceId).toBe("ws-123");
+			expect(addedRepo.linearToken).toBeUndefined();
+			expect(addedRepo.linearRefreshToken).toBeUndefined();
+		});
+
+		it("should prefer workspaceCredentials over repository credentials for the same workspace", async () => {
+			mocks.mockReadFileSync.mockReturnValue(
+				JSON.stringify({
+					repositories: [
+						{
+							id: "existing",
+							name: "existing-repo",
+							linearWorkspaceId: "ws-123",
+							linearWorkspaceName: "Old Workspace Name",
+							linearToken: "old-token",
+							linearRefreshToken: "old-refresh",
+						},
+					],
+					workspaceCredentials: [
+						{
+							linearWorkspaceId: "ws-123",
+							linearWorkspaceName: "New Workspace Name",
+							linearToken: "new-token",
+							linearRefreshToken: "new-refresh",
+						},
+					],
+				}),
+			);
+
+			await expect(
+				command.execute(["https://github.com/user/new-repo.git"]),
+			).rejects.toThrow("process.exit called");
+			expect(mockExit).toHaveBeenCalledWith(0);
+
+			const writtenConfig = JSON.parse(
+				mocks.mockWriteFileSync.mock.calls[0][1],
+			);
+			const addedRepo = writtenConfig.repositories.find(
+				(r: any) => r.id === "generated-uuid-123",
+			);
+			// New repos only get linearWorkspaceId - credentials inherited at runtime
+			expect(addedRepo.linearWorkspaceId).toBe("ws-123");
+			expect(addedRepo.linearToken).toBeUndefined();
+			expect(addedRepo.linearRefreshToken).toBeUndefined();
 		});
 	});
 
@@ -343,8 +419,10 @@ describe("SelfAddRepoCommand", () => {
 			const addedRepo = writtenConfig.repositories.find(
 				(r: any) => r.id === "generated-uuid-123",
 			);
+			// New repos only get linearWorkspaceId - credentials inherited at runtime
 			expect(addedRepo.linearWorkspaceId).toBe("ws-2");
-			expect(addedRepo.linearToken).toBe("token-2");
+			expect(addedRepo.linearToken).toBeUndefined();
+			expect(addedRepo.linearRefreshToken).toBeUndefined();
 		});
 
 		it("should use workspace from command line argument", async () => {
@@ -561,6 +639,7 @@ describe("SelfAddRepoCommand", () => {
 				(r: any) => r.id === "generated-uuid-123",
 			);
 
+			// New repos only get linearWorkspaceId - credentials inherited at runtime
 			expect(addedRepo).toEqual({
 				id: "generated-uuid-123",
 				name: "new-repo",
@@ -568,9 +647,6 @@ describe("SelfAddRepoCommand", () => {
 				baseBranch: "main",
 				workspaceBaseDir: "/home/user/.cyrus/worktrees",
 				linearWorkspaceId: "ws-123",
-				linearWorkspaceName: "Test Workspace",
-				linearToken: "existing-token",
-				linearRefreshToken: "existing-refresh",
 				isActive: true,
 			});
 		});

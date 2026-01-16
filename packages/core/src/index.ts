@@ -36,10 +36,17 @@ export type {
 export type {
 	EdgeConfig,
 	EdgeWorkerConfig,
+	LinearCredentials,
 	OAuthCallbackHandler,
 	RepositoryConfig,
+	ResolvedLinearCredentials,
+	WorkspaceCredentials,
 } from "./config-types.js";
-export { resolvePath } from "./config-types.js";
+export {
+	migrateToWorkspaceCredentials,
+	resolveCredentialsForRepository,
+	resolvePath,
+} from "./config-types.js";
 
 // Constants
 export {

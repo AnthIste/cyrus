@@ -33,9 +33,28 @@ export type OAuthCallbackHandler = (
 ) => Promise<void>;
 
 /**
- * Configuration for a single repository/workspace pair
+ * Linear OAuth credentials for a workspace.
+ * This is the primary source of credentials, stored at the workspace level.
+ *
+ * All fields are optional since this interface binds to JSON configuration.
+ * Use `resolveCredentialsForRepository()` to get validated credentials at runtime.
  */
-export interface RepositoryConfig {
+export interface LinearCredentials {
+	linearWorkspaceId?: string; // Linear workspace/organization ID
+	linearWorkspaceName?: string; // Linear workspace display name
+	linearToken?: string; // Linear OAuth access token
+	linearRefreshToken?: string; // Linear OAuth refresh token
+}
+
+/**
+ * Configuration for a single repository/workspace pair.
+ * Extends LinearCredentials - credentials are optional at the repository level.
+ * If not provided, they are inherited from workspaceCredentials in EdgeConfig.
+ *
+ * Note: All Linear-related fields are optional since this interface binds to JSON.
+ * When actually processing issues, credentials are resolved via resolveCredentialsForRepository().
+ */
+export interface RepositoryConfig extends LinearCredentials {
 	// Repository identification
 	id: string; // Unique identifier for this repo config
 	name: string; // Display name (e.g., "Frontend App")
@@ -45,11 +64,7 @@ export interface RepositoryConfig {
 	baseBranch: string; // Branch to create worktrees from (main, master, etc.)
 	githubUrl?: string; // GitHub repository URL (e.g., "https://github.com/org/repo") - used for Linear select signal
 
-	// Linear configuration
-	linearWorkspaceId: string; // Linear workspace/team ID
-	linearWorkspaceName?: string; // Linear workspace display name (optional, for UI)
-	linearToken: string; // OAuth token for this Linear workspace
-	linearRefreshToken?: string; // OAuth refresh token for automatic token renewal
+	// Linear routing configuration (credentials inherited from LinearCredentials)
 	teamKeys?: string[]; // Linear team keys for routing (e.g., ["CEE", "BOOK"])
 	routingLabels?: string[]; // Linear labels for routing issues to this repository (e.g., ["backend", "api"])
 	projectKeys?: string[]; // Linear project names for routing (e.g., ["Mobile App", "API"])
@@ -216,10 +231,132 @@ export interface EdgeWorkerConfig {
 }
 
 /**
+ * Workspace-level Linear credentials stored independently of repositories.
+ * This is the PRIMARY source of credentials. Repository-level credentials
+ * are optional overrides.
+ *
+ * This is an alias for LinearCredentials for semantic clarity at the config level.
+ */
+export type WorkspaceCredentials = LinearCredentials;
+
+/**
+ * Resolved credentials with required fields guaranteed to be present.
+ * This is the result of resolving credentials for a repository,
+ * combining workspace-level and repository-level credentials.
+ *
+ * Uses Pick + Required to derive from LinearCredentials, ensuring
+ * the essential fields (linearWorkspaceId, linearToken) are non-optional.
+ */
+export type ResolvedLinearCredentials = Required<
+	Pick<LinearCredentials, "linearWorkspaceId" | "linearToken">
+> &
+	Pick<LinearCredentials, "linearWorkspaceName" | "linearRefreshToken">;
+
+/**
+ * Resolves Linear credentials for a repository.
+ *
+ * Credential resolution order:
+ * 1. Repository-level credentials (if linearToken is set) - highest priority
+ * 2. Workspace-level credentials from workspaceCredentials array - default
+ *
+ * @param repo - The repository configuration
+ * @param workspaceCredentials - Array of workspace-level credentials
+ * @returns Resolved credentials with linearToken guaranteed to be present
+ * @throws Error if no credentials can be resolved for the repository's workspace
+ */
+export function resolveCredentialsForRepository(
+	repo: RepositoryConfig,
+	workspaceCredentials?: WorkspaceCredentials[],
+): ResolvedLinearCredentials {
+	// 1. Check for explicit repo-level override (linearToken and linearWorkspaceId are set)
+	if (repo.linearToken && repo.linearWorkspaceId) {
+		return {
+			linearWorkspaceId: repo.linearWorkspaceId,
+			linearWorkspaceName: repo.linearWorkspaceName,
+			linearToken: repo.linearToken,
+			linearRefreshToken: repo.linearRefreshToken,
+		};
+	}
+
+	// 2. Fall back to workspace-level credentials
+	// If repo has linearWorkspaceId, match on that; otherwise check if there's exactly one workspace
+	if (repo.linearWorkspaceId) {
+		const workspaceCred = workspaceCredentials?.find(
+			(w) => w.linearWorkspaceId === repo.linearWorkspaceId,
+		);
+		if (workspaceCred?.linearWorkspaceId && workspaceCred.linearToken) {
+			return {
+				linearWorkspaceId: workspaceCred.linearWorkspaceId,
+				linearWorkspaceName:
+					repo.linearWorkspaceName || workspaceCred.linearWorkspaceName,
+				linearToken: workspaceCred.linearToken,
+				linearRefreshToken: workspaceCred.linearRefreshToken,
+			};
+		}
+	} else if (workspaceCredentials?.length === 1) {
+		// No linearWorkspaceId on repo, but exactly one workspace - use it
+		const workspaceCred = workspaceCredentials[0];
+		if (workspaceCred?.linearWorkspaceId && workspaceCred.linearToken) {
+			return {
+				linearWorkspaceId: workspaceCred.linearWorkspaceId,
+				linearWorkspaceName:
+					repo.linearWorkspaceName || workspaceCred.linearWorkspaceName,
+				linearToken: workspaceCred.linearToken,
+				linearRefreshToken: workspaceCred.linearRefreshToken,
+			};
+		}
+	}
+
+	const workspaceIdHint = repo.linearWorkspaceId || "(not specified)";
+	throw new Error(
+		`No credentials found for workspace ${workspaceIdHint}. ` +
+			`Either set linearToken on the repository or add credentials to workspaceCredentials.`,
+	);
+}
+
+/**
+ * Migrates legacy config by extracting unique workspace credentials from repositories.
+ * This provides backward compatibility for configs that only have repo-level credentials.
+ *
+ * @param config - The edge config to migrate
+ * @returns true if migration was performed, false if no migration needed
+ */
+export function migrateToWorkspaceCredentials(config: EdgeConfig): boolean {
+	// Skip if workspaceCredentials already has entries
+	if (config.workspaceCredentials && config.workspaceCredentials.length > 0) {
+		return false;
+	}
+
+	// Extract unique workspace credentials from repositories
+	const workspaceMap = new Map<string, WorkspaceCredentials>();
+	for (const repo of config.repositories) {
+		if (repo.linearWorkspaceId && repo.linearToken) {
+			// Only add if we haven't seen this workspace yet
+			if (!workspaceMap.has(repo.linearWorkspaceId)) {
+				workspaceMap.set(repo.linearWorkspaceId, {
+					linearWorkspaceId: repo.linearWorkspaceId,
+					linearWorkspaceName: repo.linearWorkspaceName,
+					linearToken: repo.linearToken,
+					linearRefreshToken: repo.linearRefreshToken,
+				});
+			}
+		}
+	}
+
+	if (workspaceMap.size > 0) {
+		config.workspaceCredentials = Array.from(workspaceMap.values());
+		return true;
+	}
+
+	return false;
+}
+
+/**
  * Edge configuration containing all repositories and global settings
  */
 export interface EdgeConfig {
 	repositories: RepositoryConfig[];
+	workspaceCredentials?: WorkspaceCredentials[]; // Workspace-level credentials (independent of repositories)
 	ngrokAuthToken?: string;
 	stripeCustomerId?: string;
 	linearWorkspaceSlug?: string; // Linear workspace URL slug (e.g., "ceedar" from "https://linear.app/ceedar/...")

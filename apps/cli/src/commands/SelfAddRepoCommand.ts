@@ -8,18 +8,9 @@ import {
 	DEFAULT_CONFIG_FILENAME,
 	DEFAULT_WORKTREES_DIR,
 	type EdgeConfig,
+	type WorkspaceCredentials,
 } from "cyrus-core";
 import { BaseCommand } from "./ICommand.js";
-
-/**
- * Workspace credentials extracted from existing repository configurations
- */
-interface WorkspaceCredentials {
-	id: string;
-	name: string;
-	token: string;
-	refreshToken?: string;
-}
 
 /**
  * Self-add-repo command - clones a repo and adds it to config.json
@@ -100,7 +91,22 @@ export class SelfAddRepoCommand extends BaseCommand {
 			}
 
 			// Find workspaces with Linear credentials
+			// First, check workspace-level credentials (preferred source)
 			const workspaces = new Map<string, WorkspaceCredentials>();
+			if (config.workspaceCredentials) {
+				for (const cred of config.workspaceCredentials) {
+					if (cred.linearWorkspaceId && cred.linearToken) {
+						workspaces.set(cred.linearWorkspaceId, {
+							linearWorkspaceId: cred.linearWorkspaceId,
+							linearWorkspaceName:
+								cred.linearWorkspaceName || cred.linearWorkspaceId,
+							linearToken: cred.linearToken,
+							linearRefreshToken: cred.linearRefreshToken,
+						});
+					}
+				}
+			}
+			// Also check repository-level credentials (for backward compatibility)
 			for (const repo of config.repositories) {
 				if (
 					repo.linearWorkspaceId &&
@@ -108,10 +114,11 @@ export class SelfAddRepoCommand extends BaseCommand {
 					!workspaces.has(repo.linearWorkspaceId)
 				) {
 					workspaces.set(repo.linearWorkspaceId, {
-						id: repo.linearWorkspaceId,
-						name: repo.linearWorkspaceName || repo.linearWorkspaceId,
-						token: repo.linearToken,
-						refreshToken: repo.linearRefreshToken,
+						linearWorkspaceId: repo.linearWorkspaceId,
+						linearWorkspaceName:
+							repo.linearWorkspaceName || repo.linearWorkspaceId,
+						linearToken: repo.linearToken,
+						linearRefreshToken: repo.linearRefreshToken,
 					});
 				}
 			}
@@ -132,7 +139,7 @@ export class SelfAddRepoCommand extends BaseCommand {
 				selectedWorkspace = workspaceList[0]!;
 			} else if (workspaceName) {
 				const foundWorkspace = workspaceList.find(
-					(w) => w.name === workspaceName,
+					(w) => w.linearWorkspaceName === workspaceName,
 				);
 				if (!foundWorkspace) {
 					this.logError(`Workspace '${workspaceName}' not found`);
@@ -142,7 +149,7 @@ export class SelfAddRepoCommand extends BaseCommand {
 			} else {
 				console.log("\nAvailable workspaces:");
 				workspaceList.forEach((w, i) => {
-					console.log(`  ${i + 1}. ${w.name}`);
+					console.log(`  ${i + 1}. ${w.linearWorkspaceName}`);
 				});
 				const choice = await this.prompt(
 					`Select workspace [1-${workspaceList.length}]: `,
@@ -172,6 +179,7 @@ export class SelfAddRepoCommand extends BaseCommand {
 			}
 
 			// Generate UUID and add to config
+			// Only set linearWorkspaceId - credentials are inherited from workspaceCredentials
 			const id = randomUUID();
 
 			config.repositories.push({
@@ -180,10 +188,10 @@ export class SelfAddRepoCommand extends BaseCommand {
 				repositoryPath,
 				baseBranch: DEFAULT_BASE_BRANCH,
 				workspaceBaseDir: resolve(this.app.cyrusHome, DEFAULT_WORKTREES_DIR),
-				linearWorkspaceId: selectedWorkspace.id,
-				linearWorkspaceName: selectedWorkspace.name,
-				linearToken: selectedWorkspace.token,
-				linearRefreshToken: selectedWorkspace.refreshToken,
+				linearWorkspaceId: selectedWorkspace.linearWorkspaceId,
+				// Note: linearToken and linearRefreshToken are intentionally NOT set here.
+				// Credentials are inherited from workspaceCredentials at runtime.
+				// Repository-level credentials are only for explicit overrides.
 				isActive: true,
 			});
 
@@ -191,7 +199,7 @@ export class SelfAddRepoCommand extends BaseCommand {
 
 			console.log(`\nAdded: ${repoName}`);
 			console.log(`  ID: ${id}`);
-			console.log(`  Workspace: ${selectedWorkspace.name}`);
+			console.log(`  Workspace: ${selectedWorkspace.linearWorkspaceName}`);
 			process.exit(0);
 		} finally {
 			this.cleanup();
