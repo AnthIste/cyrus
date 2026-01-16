@@ -39,6 +39,12 @@ export interface WorkflowLoaderConfig {
 	 * @default "workflows/"
 	 */
 	path?: string;
+
+	/**
+	 * Cyrus home directory. Git repositories will be cloned to {cyrusHome}/workflows/{repo-name}.
+	 * @default "~/.cyrus"
+	 */
+	cyrusHome?: string;
 }
 
 /**
@@ -69,6 +75,7 @@ export class WorkflowLoader {
 			source: config.source,
 			branch: config.branch ?? "main",
 			path: config.path ?? "workflows/",
+			cyrusHome: config.cyrusHome ?? path.join(os.homedir(), ".cyrus"),
 		};
 
 		this.parser = parser ?? new WorkflowParser();
@@ -119,11 +126,11 @@ export class WorkflowLoader {
 
 	/**
 	 * Get the working directory for a Git repository
-	 * Uses ~/.cyrus/workflows/{repo-name} to match Cyrus's pattern
+	 * Uses {cyrusHome}/workflows/{repo-name} to match Cyrus's pattern
 	 */
 	private getGitWorkingDirectory(): string {
 		const repoName = this.extractRepoName(this.config.source);
-		return path.join(os.homedir(), ".cyrus", "workflows", repoName);
+		return path.join(this.config.cyrusHome, "workflows", repoName);
 	}
 
 	/**
