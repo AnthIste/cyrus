@@ -12,6 +12,7 @@ import { RefreshTokenCommand } from "./commands/RefreshTokenCommand.js";
 import { SelfAddRepoCommand } from "./commands/SelfAddRepoCommand.js";
 import { SelfAuthCommand } from "./commands/SelfAuthCommand.js";
 import { StartCommand } from "./commands/StartCommand.js";
+import { WorkflowsCommand } from "./commands/WorkflowsCommand.js";
 
 // Get the directory of the current module for reading package.json
 const __filename = fileURLToPath(import.meta.url);
@@ -121,6 +122,24 @@ program
 		);
 		await new SelfAddRepoCommand(app).execute(
 			[url, workspace].filter(Boolean) as string[],
+		);
+	});
+
+// Workflows command - Manage and inspect workflows
+program
+	.command("workflows [subcommand] [arg]")
+	.description(
+		"Manage workflows. Subcommands: list, refresh, validate <path>, show <name>",
+	)
+	.action(async (subcommand?: string, arg?: string) => {
+		const opts = program.opts();
+		const app = new Application(
+			opts.cyrusHome,
+			opts.envFile,
+			packageJson.version,
+		);
+		await new WorkflowsCommand(app).execute(
+			[subcommand, arg].filter(Boolean) as string[],
 		);
 	});
 

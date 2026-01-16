@@ -18,6 +18,9 @@ export { AskUserQuestionHandler } from "./AskUserQuestionHandler.js";
 export { EdgeWorker } from "./EdgeWorker.js";
 export type { GitServiceLogger } from "./GitService.js";
 export { GitService } from "./GitService.js";
+export type { ProcedureDefinition } from "./procedures/index.js";
+// Export procedure registry for built-in workflows
+export { PROCEDURES } from "./procedures/index.js";
 export { RepositoryRouter } from "./RepositoryRouter.js";
 export { SharedApplicationServer } from "./SharedApplicationServer.js";
 export type { EdgeWorkerEvents } from "./types.js";
@@ -35,9 +38,14 @@ export type { WorktreeIncludeLogger } from "./WorktreeIncludeService.js";
 export { WorktreeIncludeService } from "./WorktreeIncludeService.js";
 // Export workflow types for YAML workflow definitions
 export type {
+	DirectoryParseResult,
 	SubroutineReference,
+	ValidationResult as WorkflowValidationResult,
 	WorkflowCollection,
 	WorkflowDefinition,
+	WorkflowLoaderConfig,
 	WorkflowMatchResult,
 	WorkflowTriggers,
 } from "./workflows/index.js";
+// Export workflow loader and parser for CLI usage
+export { WorkflowLoader, WorkflowParser } from "./workflows/index.js";
