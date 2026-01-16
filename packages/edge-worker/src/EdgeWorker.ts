@@ -3041,6 +3041,61 @@ export class EdgeWorker extends EventEmitter {
 	}
 
 	/**
+	 * Extract a repository identifier for use in description tags.
+	 * For Azure DevOps: org/project/_git/repo
+	 * For GitHub: org/repo
+	 * Fallback: repo name
+	 */
+	private extractRepoIdentifier(repo: RepositoryConfig): string {
+		if (repo.azureDevOps) {
+			const { organization, project, repository } = repo.azureDevOps;
+			return `${organization}/${project}/_git/${repository}`;
+		}
+
+		if (repo.githubUrl) {
+			const match = repo.githubUrl.match(/github\.com\/([^/]+\/[^/]+)/);
+			return match?.[1] || repo.name;
+		}
+
+		if (repo.repoUrl) {
+			// Generic URL: strip protocol and domain
+			return repo.repoUrl.replace(/^https?:\/\/[^/]+\//, "");
+		}
+
+		return repo.name;
+	}
+
+	/**
+	 * Build VCS-specific context tags for a repository.
+	 * Returns an array of XML tag lines (without leading whitespace).
+	 */
+	private buildVcsContextTags(repo: RepositoryConfig): string[] {
+		const tags: string[] = [];
+		const vcsType = repo.vcsType || "github";
+		const repoUrl = repo.repoUrl || repo.githubUrl || "N/A";
+
+		tags.push(`<vcs_type>${vcsType}</vcs_type>`);
+		tags.push(`<repo_url>${repoUrl}</repo_url>`);
+
+		// GitHub-specific: backward-compatible github_url tag
+		if (vcsType === "github" && repo.githubUrl) {
+			tags.push(`<github_url>${repo.githubUrl}</github_url>`);
+		}
+
+		// Azure DevOps-specific context
+		if (repo.azureDevOps) {
+			const { organization, project, repository } = repo.azureDevOps;
+			tags.push(`<azure_devops>`);
+			tags.push(`  <organization>${organization}</organization>`);
+			tags.push(`  <project>${project}</project>`);
+			tags.push(`  <repository>${repository}</repository>`);
+			tags.push(`</azure_devops>`);
+		}
+
+		return tags;
+	}
+
+	/**
 	 * Generate routing context for orchestrator mode
 	 *
 	 * This provides the orchestrator with information about available repositories
@@ -3069,15 +3124,7 @@ export class EdgeWorker extends EventEmitter {
 			const routingMethods: string[] = [];
 
 			// Description tag routing (always available)
-			// Use repoUrl, then fall back to githubUrl or repo name
-			const repoIdentifier = repo.repoUrl
-				? repo.repoUrl.replace(
-						/^https?:\/\/(github\.com|dev\.azure\.com)\//,
-						"",
-					)
-				: repo.githubUrl
-					? repo.githubUrl.replace("https://github.com/", "")
-					: repo.name;
+			const repoIdentifier = this.extractRepoIdentifier(repo);
 			routingMethods.push(
 				`    - Description tag: Add \`[repo=${repoIdentifier}]\` to sub-issue description`,
 			);
@@ -3106,30 +3153,13 @@ export class EdgeWorker extends EventEmitter {
 			const currentMarker =
 				repo.id === currentRepository.id ? " (current)" : "";
 
-			// Determine VCS type and URL
-			const vcsType = repo.vcsType || "github";
-			const repoUrl = repo.repoUrl || repo.githubUrl || "N/A";
-
-			// Build GitHub URL tag for backward compatibility (only for GitHub repos)
-			const githubUrlTag =
-				vcsType === "github" && repo.githubUrl
-					? `
-    <github_url>${repo.githubUrl}</github_url>`
-					: "";
-
-			// Build Azure DevOps context if available
-			const azureContext = repo.azureDevOps
-				? `
-    <azure_devops>
-      <organization>${repo.azureDevOps.organization}</organization>
-      <project>${repo.azureDevOps.project}</project>
-      <repository>${repo.azureDevOps.repository}</repository>
-    </azure_devops>`
-				: "";
+			// Build VCS context tags
+			const vcsContextTags = this.buildVcsContextTags(repo)
+				.map((tag) => `    ${tag}`)
+				.join("\n");
 
 			return `  <repository name="${repo.name}"${currentMarker}>
-    <vcs_type>${vcsType}</vcs_type>
-    <repo_url>${repoUrl}</repo_url>${githubUrlTag}${azureContext}
+${vcsContextTags}
     <routing_methods>
 ${routingMethods.join("\n")}
     </routing_methods>
