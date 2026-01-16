@@ -2,6 +2,25 @@
 
 All verification checks have passed. Now create a draft pull request in Azure DevOps and update the changelog if the project uses one.
 
+## Azure DevOps Context
+
+**IMPORTANT:** Extract the organization, project, and repository from the `<azure_devops>` context in your system prompt. You MUST pass these to all `az repos` commands:
+
+```
+--organization https://dev.azure.com/{organization} --project {project}
+```
+
+For example, if your context shows:
+```xml
+<azure_devops>
+  <organization>myorg</organization>
+  <project>MyProject</project>
+  <repository>my-repo</repository>
+</azure_devops>
+```
+
+Then use: `--organization https://dev.azure.com/myorg --project MyProject`
+
 ## Your Tasks
 
 ### 1. Push Current Branch
@@ -17,10 +36,19 @@ Check if a PR already exists, if not create a draft PR:
 
 ```bash
 # Check if PR already exists for this branch
-az repos pr list --source-branch "$(git branch --show-current)" --status active --output json
+az repos pr list \
+  --organization https://dev.azure.com/{organization} \
+  --project {project} \
+  --repository {repository} \
+  --source-branch "$(git branch --show-current)" \
+  --status active \
+  --output json
 
 # If no PR exists, create a draft PR
 az repos pr create \
+  --organization https://dev.azure.com/{organization} \
+  --project {project} \
+  --repository {repository} \
   --draft true \
   --title "WIP: [brief description]" \
   --description "Work in progress for [ISSUE-ID]. Full description to follow." \
@@ -30,7 +58,11 @@ az repos pr create \
 
 If a PR already exists, get its details:
 ```bash
-az repos pr show --id <PR_ID> --output json
+az repos pr show \
+  --organization https://dev.azure.com/{organization} \
+  --project {project} \
+  --id <PR_ID> \
+  --output json
 ```
 
 Record the PR URL and ID for use in the changelog entry.
