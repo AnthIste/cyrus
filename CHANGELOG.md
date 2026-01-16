@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
-- **Azure DevOps Repos integration (alpha)** - Cyrus now supports Azure DevOps Repos for source code management alongside GitHub. Configure repositories with `vcsType: "azure-devops"` to use `az repos pr` commands for PR creation and management while continuing to use Linear for issue tracking. ([RUB-62](https://linear.app/rbakker/issue/RUB-62))
+- **Azure DevOps Repos integration (alpha)** - Cyrus now supports Azure DevOps Repos for source code management alongside GitHub. Configure repositories with `vcsType: "azure-devops"` to use `az repos pr` commands for PR creation and management while continuing to use Linear for issue tracking. ([RUB-62](https://linear.app/rbakker/issue/RUB-62), [#1](https://github.com/AnthIste/cyrus/pull/1))
 
 ### Fixed
 - **Cross-repository orchestration** - Fixed an issue where parent sessions could not be resumed when orchestrating sub-issues across different repositories. Child sessions now correctly locate and resume their parent sessions regardless of which repository they belong to. ([CYPACK-722](https://linear.app/ceedar/issue/CYPACK-722), [#768](https://github.com/ceedaragents/cyrus/pull/768))

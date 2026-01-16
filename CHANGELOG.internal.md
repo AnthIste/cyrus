@@ -5,7 +5,7 @@ This changelog documents internal development changes, refactors, tooling update
 ## [Unreleased]
 
 ### Added
-- **Azure DevOps VCS platform support** - Extended `RepositoryConfig` with `vcsType`, `repoUrl`, and `azureDevOps` fields. Added platform-aware procedure selection in `ProcedureAnalyzer` and Azure DevOps-specific procedures (`full-development-azure`, `documentation-edit-azure`, `debugger-full-azure`). Created new subroutines `az-pr-create.md` and `az-pr-finalize.md` for Azure DevOps PR operations. Updated EdgeWorker routing context to include `<vcs_type>` and `<repo_url>` tags. ([RUB-62](https://linear.app/rbakker/issue/RUB-62))
+- **Azure DevOps VCS platform support** - Extended `RepositoryConfig` with `vcsType`, `repoUrl`, and `azureDevOps` fields. Added platform-aware procedure selection in `ProcedureAnalyzer` and Azure DevOps-specific procedures (`full-development-azure`, `documentation-edit-azure`, `debugger-full-azure`). Created new subroutines `az-pr-create.md` and `az-pr-finalize.md` for Azure DevOps PR operations. Updated EdgeWorker routing context to include `<vcs_type>` and `<repo_url>` tags. ([RUB-62](https://linear.app/rbakker/issue/RUB-62), [#1](https://github.com/AnthIste/cyrus/pull/1))
 
 ## [0.2.13] - 2026-01-15
 
