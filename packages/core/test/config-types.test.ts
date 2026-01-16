@@ -17,6 +17,15 @@ describe("resolveCredentialsForRepository", () => {
 		linearWorkspaceId: "ws-123",
 	};
 
+	const baseRepoWithoutWorkspaceId: RepositoryConfig = {
+		id: "repo-1",
+		name: "test-repo",
+		repositoryPath: "/path/to/repo",
+		baseBranch: "main",
+		workspaceBaseDir: "/path/to/worktrees",
+		// No linearWorkspaceId - optional since config binds to JSON
+	};
+
 	describe("workspace credentials as primary source", () => {
 		it("should resolve credentials from workspaceCredentials when repo has no token", () => {
 			const workspaceCredentials: WorkspaceCredentials[] = [
@@ -159,6 +168,55 @@ describe("resolveCredentialsForRepository", () => {
 			);
 
 			expect(result.linearToken).toBe("token-123");
+		});
+	});
+
+	describe("single workspace fallback", () => {
+		it("should use single workspace credentials when repo has no linearWorkspaceId", () => {
+			const workspaceCredentials: WorkspaceCredentials[] = [
+				{
+					linearWorkspaceId: "ws-only",
+					linearWorkspaceName: "Only Workspace",
+					linearToken: "single-token",
+					linearRefreshToken: "single-refresh",
+				},
+			];
+
+			const result = resolveCredentialsForRepository(
+				baseRepoWithoutWorkspaceId,
+				workspaceCredentials,
+			);
+
+			expect(result.linearWorkspaceId).toBe("ws-only");
+			expect(result.linearWorkspaceName).toBe("Only Workspace");
+			expect(result.linearToken).toBe("single-token");
+			expect(result.linearRefreshToken).toBe("single-refresh");
+		});
+
+		it("should throw when repo has no linearWorkspaceId and multiple workspaces exist", () => {
+			const workspaceCredentials: WorkspaceCredentials[] = [
+				{
+					linearWorkspaceId: "ws-111",
+					linearToken: "token-111",
+				},
+				{
+					linearWorkspaceId: "ws-222",
+					linearToken: "token-222",
+				},
+			];
+
+			expect(() =>
+				resolveCredentialsForRepository(
+					baseRepoWithoutWorkspaceId,
+					workspaceCredentials,
+				),
+			).toThrow(/No credentials found for workspace \(not specified\)/);
+		});
+
+		it("should throw when repo has no linearWorkspaceId and no workspace credentials", () => {
+			expect(() =>
+				resolveCredentialsForRepository(baseRepoWithoutWorkspaceId, []),
+			).toThrow(/No credentials found for workspace \(not specified\)/);
 		});
 	});
 });
