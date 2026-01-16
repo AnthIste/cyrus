@@ -535,5 +535,141 @@ describe("SelfAuthCommand", () => {
 			// repo with different workspace should NOT be updated
 			expect(writtenConfig.repositories[1].linearToken).toBe("keep");
 		});
+
+		it("should store workspace credentials even when no repositories exist", async () => {
+			mocks.mockReadFileSync.mockReturnValue(
+				JSON.stringify({
+					repositories: [],
+				}),
+			);
+
+			let routeHandler: Function;
+			mocks.mockFastifyInstance.get.mockImplementation(
+				(_path: string, handler: Function) => {
+					routeHandler = handler;
+				},
+			);
+			mocks.mockFastifyInstance.listen.mockImplementation(async () => {
+				setTimeout(async () => {
+					const mockRequest = { query: { code: "code" } };
+					const mockReply = {
+						type: vi.fn().mockReturnThis(),
+						code: vi.fn().mockReturnThis(),
+						send: vi.fn().mockReturnThis(),
+					};
+					await routeHandler(mockRequest, mockReply);
+				}, 10);
+			});
+
+			mocks.mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () =>
+					Promise.resolve({
+						access_token: "lin_oauth_new",
+						refresh_token: "refresh_new",
+					}),
+			});
+
+			// Update the LinearClient mock for this specific test
+			const { LinearClient } = await import("@linear/sdk");
+			(LinearClient as any).mockImplementation(() => ({
+				viewer: Promise.resolve({
+					organization: Promise.resolve({
+						id: "ws-new",
+						name: "New Workspace",
+					}),
+				}),
+			}));
+
+			await expect(command.execute([])).rejects.toThrow("process.exit called");
+			expect(mockExit).toHaveBeenCalledWith(0);
+
+			const writtenConfig = JSON.parse(
+				mocks.mockWriteFileSync.mock.calls[0][1],
+			);
+
+			// workspaceCredentials should be created with the new credentials
+			expect(writtenConfig.workspaceCredentials).toBeDefined();
+			expect(writtenConfig.workspaceCredentials).toHaveLength(1);
+			expect(writtenConfig.workspaceCredentials[0]).toEqual({
+				id: "ws-new",
+				name: "New Workspace",
+				token: "lin_oauth_new",
+				refreshToken: "refresh_new",
+			});
+
+			// repositories should still be empty
+			expect(writtenConfig.repositories).toHaveLength(0);
+		});
+
+		it("should update existing workspaceCredentials if workspace already exists", async () => {
+			mocks.mockReadFileSync.mockReturnValue(
+				JSON.stringify({
+					repositories: [],
+					workspaceCredentials: [
+						{
+							id: "ws-existing",
+							name: "Existing Workspace",
+							token: "old_token",
+							refreshToken: "old_refresh",
+						},
+					],
+				}),
+			);
+
+			let routeHandler: Function;
+			mocks.mockFastifyInstance.get.mockImplementation(
+				(_path: string, handler: Function) => {
+					routeHandler = handler;
+				},
+			);
+			mocks.mockFastifyInstance.listen.mockImplementation(async () => {
+				setTimeout(async () => {
+					const mockRequest = { query: { code: "code" } };
+					const mockReply = {
+						type: vi.fn().mockReturnThis(),
+						code: vi.fn().mockReturnThis(),
+						send: vi.fn().mockReturnThis(),
+					};
+					await routeHandler(mockRequest, mockReply);
+				}, 10);
+			});
+
+			mocks.mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () =>
+					Promise.resolve({
+						access_token: "lin_oauth_updated",
+						refresh_token: "refresh_updated",
+					}),
+			});
+
+			// Update the LinearClient mock for this specific test
+			const { LinearClient } = await import("@linear/sdk");
+			(LinearClient as any).mockImplementation(() => ({
+				viewer: Promise.resolve({
+					organization: Promise.resolve({
+						id: "ws-existing",
+						name: "Updated Workspace Name",
+					}),
+				}),
+			}));
+
+			await expect(command.execute([])).rejects.toThrow("process.exit called");
+			expect(mockExit).toHaveBeenCalledWith(0);
+
+			const writtenConfig = JSON.parse(
+				mocks.mockWriteFileSync.mock.calls[0][1],
+			);
+
+			// workspaceCredentials should be updated (not duplicated)
+			expect(writtenConfig.workspaceCredentials).toHaveLength(1);
+			expect(writtenConfig.workspaceCredentials[0]).toEqual({
+				id: "ws-existing",
+				name: "Updated Workspace Name",
+				token: "lin_oauth_updated",
+				refreshToken: "refresh_updated",
+			});
+		});
 	});
 });

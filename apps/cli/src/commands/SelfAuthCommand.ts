@@ -240,7 +240,30 @@ export class SelfAuthCommand extends BaseCommand {
 		tokens: { accessToken: string; refreshToken?: string },
 		workspace: { id: string; name: string },
 	): void {
-		// Update all repositories matching this workspace (or unset workspace)
+		// Always store workspace credentials at the config level
+		// This allows self-add-repo to work even when no repositories exist
+		if (!config.workspaceCredentials) {
+			config.workspaceCredentials = [];
+		}
+
+		// Update or add workspace credentials
+		const existingCredential = config.workspaceCredentials.find(
+			(w) => w.id === workspace.id,
+		);
+		if (existingCredential) {
+			existingCredential.token = tokens.accessToken;
+			existingCredential.refreshToken = tokens.refreshToken;
+			existingCredential.name = workspace.name;
+		} else {
+			config.workspaceCredentials.push({
+				id: workspace.id,
+				name: workspace.name,
+				token: tokens.accessToken,
+				refreshToken: tokens.refreshToken,
+			});
+		}
+
+		// Also update all repositories matching this workspace (or unset workspace)
 		for (const repo of config.repositories) {
 			if (
 				repo.linearWorkspaceId === workspace.id ||

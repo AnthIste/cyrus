@@ -38,6 +38,7 @@ export type {
 	EdgeWorkerConfig,
 	OAuthCallbackHandler,
 	RepositoryConfig,
+	WorkspaceCredentials,
 } from "./config-types.js";
 export { resolvePath } from "./config-types.js";
 
