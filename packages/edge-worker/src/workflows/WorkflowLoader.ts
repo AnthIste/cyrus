@@ -8,7 +8,6 @@
 
 import { execSync } from "node:child_process";
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 
 import type { ProcedureDefinition } from "../procedures/types.js";
@@ -41,8 +40,8 @@ export interface WorkflowLoaderConfig {
 	path?: string;
 
 	/**
-	 * Cyrus home directory. Git repositories will be cloned to {cyrusHome}/workflows/{repo-name}.
-	 * @default "~/.cyrus"
+	 * Cyrus home directory. Required for Git sources - repositories will be cloned to
+	 * {cyrusHome}/workflows/{repo-name}. Not used for local filesystem sources.
 	 */
 	cyrusHome?: string;
 }
@@ -56,7 +55,9 @@ export interface WorkflowLoaderConfig {
  * - Manual refresh capability
  */
 export class WorkflowLoader {
-	private readonly config: Required<WorkflowLoaderConfig>;
+	private readonly config: Required<Omit<WorkflowLoaderConfig, "cyrusHome">> & {
+		cyrusHome: string | undefined;
+	};
 	private readonly parser: WorkflowParser;
 	private procedures = new Map<string, ProcedureDefinition>();
 	private workflows = new Map<string, WorkflowDefinition>();
@@ -69,13 +70,22 @@ export class WorkflowLoader {
 	 *
 	 * @param config - Configuration for the loader
 	 * @param parser - Optional WorkflowParser instance. If not provided, a new one is created.
+	 * @throws Error if source is a Git URL but cyrusHome is not provided
 	 */
 	constructor(config: WorkflowLoaderConfig, parser?: WorkflowParser) {
+		const isGit = this.isGitUrl(config.source);
+
+		if (isGit && !config.cyrusHome) {
+			throw new Error(
+				"cyrusHome is required when loading workflows from a Git repository",
+			);
+		}
+
 		this.config = {
 			source: config.source,
 			branch: config.branch ?? "main",
 			path: config.path ?? "workflows/",
-			cyrusHome: config.cyrusHome ?? path.join(os.homedir(), ".cyrus"),
+			cyrusHome: config.cyrusHome,
 		};
 
 		this.parser = parser ?? new WorkflowParser();
@@ -129,8 +139,9 @@ export class WorkflowLoader {
 	 * Uses {cyrusHome}/workflows/{repo-name} to match Cyrus's pattern
 	 */
 	private getGitWorkingDirectory(): string {
+		// cyrusHome is guaranteed to be set for Git sources (validated in constructor)
 		const repoName = this.extractRepoName(this.config.source);
-		return path.join(this.config.cyrusHome, "workflows", repoName);
+		return path.join(this.config.cyrusHome!, "workflows", repoName);
 	}
 
 	/**

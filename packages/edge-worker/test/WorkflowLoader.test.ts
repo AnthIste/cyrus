@@ -450,19 +450,23 @@ describe("WorkflowLoader", () => {
 		it("should detect HTTPS Git URLs", () => {
 			const loader = new WorkflowLoader({
 				source: "https://github.com/org/repo.git",
+				cyrusHome: tempDir,
 			});
 			// The loader should recognize this as a Git source
 			// We can verify by checking the workflow path is not the source itself
 			expect(loader.getWorkflowPath()).not.toBe(
 				"https://github.com/org/repo.git",
 			);
+			expect(loader.getWorkflowPath()).toContain(tempDir);
 		});
 
 		it("should detect SSH Git URLs", () => {
 			const loader = new WorkflowLoader({
 				source: "git@github.com:org/repo.git",
+				cyrusHome: tempDir,
 			});
 			expect(loader.getWorkflowPath()).not.toBe("git@github.com:org/repo.git");
+			expect(loader.getWorkflowPath()).toContain(tempDir);
 		});
 
 		it("should treat local paths as filesystem sources", () => {
@@ -470,6 +474,17 @@ describe("WorkflowLoader", () => {
 				source: "/local/path/to/workflows",
 			});
 			expect(loader.getWorkflowPath()).toContain("/local/path/to/workflows");
+		});
+
+		it("should require cyrusHome for Git sources", () => {
+			expect(
+				() =>
+					new WorkflowLoader({
+						source: "https://github.com/org/repo.git",
+					}),
+			).toThrow(
+				"cyrusHome is required when loading workflows from a Git repository",
+			);
 		});
 	});
 
