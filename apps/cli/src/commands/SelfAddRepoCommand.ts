@@ -95,12 +95,13 @@ export class SelfAddRepoCommand extends BaseCommand {
 			const workspaces = new Map<string, WorkspaceCredentials>();
 			if (config.workspaceCredentials) {
 				for (const cred of config.workspaceCredentials) {
-					if (cred.id && cred.token) {
-						workspaces.set(cred.id, {
-							id: cred.id,
-							name: cred.name || cred.id,
-							token: cred.token,
-							refreshToken: cred.refreshToken,
+					if (cred.linearWorkspaceId && cred.linearToken) {
+						workspaces.set(cred.linearWorkspaceId, {
+							linearWorkspaceId: cred.linearWorkspaceId,
+							linearWorkspaceName:
+								cred.linearWorkspaceName || cred.linearWorkspaceId,
+							linearToken: cred.linearToken,
+							linearRefreshToken: cred.linearRefreshToken,
 						});
 					}
 				}
@@ -113,10 +114,11 @@ export class SelfAddRepoCommand extends BaseCommand {
 					!workspaces.has(repo.linearWorkspaceId)
 				) {
 					workspaces.set(repo.linearWorkspaceId, {
-						id: repo.linearWorkspaceId,
-						name: repo.linearWorkspaceName || repo.linearWorkspaceId,
-						token: repo.linearToken,
-						refreshToken: repo.linearRefreshToken,
+						linearWorkspaceId: repo.linearWorkspaceId,
+						linearWorkspaceName:
+							repo.linearWorkspaceName || repo.linearWorkspaceId,
+						linearToken: repo.linearToken,
+						linearRefreshToken: repo.linearRefreshToken,
 					});
 				}
 			}
@@ -137,7 +139,7 @@ export class SelfAddRepoCommand extends BaseCommand {
 				selectedWorkspace = workspaceList[0]!;
 			} else if (workspaceName) {
 				const foundWorkspace = workspaceList.find(
-					(w) => w.name === workspaceName,
+					(w) => w.linearWorkspaceName === workspaceName,
 				);
 				if (!foundWorkspace) {
 					this.logError(`Workspace '${workspaceName}' not found`);
@@ -147,7 +149,7 @@ export class SelfAddRepoCommand extends BaseCommand {
 			} else {
 				console.log("\nAvailable workspaces:");
 				workspaceList.forEach((w, i) => {
-					console.log(`  ${i + 1}. ${w.name}`);
+					console.log(`  ${i + 1}. ${w.linearWorkspaceName}`);
 				});
 				const choice = await this.prompt(
 					`Select workspace [1-${workspaceList.length}]: `,
@@ -185,10 +187,10 @@ export class SelfAddRepoCommand extends BaseCommand {
 				repositoryPath,
 				baseBranch: DEFAULT_BASE_BRANCH,
 				workspaceBaseDir: resolve(this.app.cyrusHome, DEFAULT_WORKTREES_DIR),
-				linearWorkspaceId: selectedWorkspace.id,
-				linearWorkspaceName: selectedWorkspace.name,
-				linearToken: selectedWorkspace.token,
-				linearRefreshToken: selectedWorkspace.refreshToken,
+				linearWorkspaceId: selectedWorkspace.linearWorkspaceId,
+				linearWorkspaceName: selectedWorkspace.linearWorkspaceName,
+				linearToken: selectedWorkspace.linearToken,
+				linearRefreshToken: selectedWorkspace.linearRefreshToken,
 				isActive: true,
 			});
 
@@ -196,7 +198,7 @@ export class SelfAddRepoCommand extends BaseCommand {
 
 			console.log(`\nAdded: ${repoName}`);
 			console.log(`  ID: ${id}`);
-			console.log(`  Workspace: ${selectedWorkspace.name}`);
+			console.log(`  Workspace: ${selectedWorkspace.linearWorkspaceName}`);
 			process.exit(0);
 		} finally {
 			this.cleanup();

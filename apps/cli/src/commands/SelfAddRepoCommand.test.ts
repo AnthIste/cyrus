@@ -275,10 +275,10 @@ describe("SelfAddRepoCommand", () => {
 					repositories: [],
 					workspaceCredentials: [
 						{
-							id: "ws-123",
-							name: "Test Workspace",
-							token: "workspace-token",
-							refreshToken: "workspace-refresh",
+							linearWorkspaceId: "ws-123",
+							linearWorkspaceName: "Test Workspace",
+							linearToken: "workspace-token",
+							linearRefreshToken: "workspace-refresh",
 						},
 					],
 				}),
@@ -316,10 +316,10 @@ describe("SelfAddRepoCommand", () => {
 					],
 					workspaceCredentials: [
 						{
-							id: "ws-123",
-							name: "New Workspace Name",
-							token: "new-token",
-							refreshToken: "new-refresh",
+							linearWorkspaceId: "ws-123",
+							linearWorkspaceName: "New Workspace Name",
+							linearToken: "new-token",
+							linearRefreshToken: "new-refresh",
 						},
 					],
 				}),

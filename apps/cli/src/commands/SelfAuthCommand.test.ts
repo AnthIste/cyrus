@@ -592,10 +592,10 @@ describe("SelfAuthCommand", () => {
 			expect(writtenConfig.workspaceCredentials).toBeDefined();
 			expect(writtenConfig.workspaceCredentials).toHaveLength(1);
 			expect(writtenConfig.workspaceCredentials[0]).toEqual({
-				id: "ws-new",
-				name: "New Workspace",
-				token: "lin_oauth_new",
-				refreshToken: "refresh_new",
+				linearWorkspaceId: "ws-new",
+				linearWorkspaceName: "New Workspace",
+				linearToken: "lin_oauth_new",
+				linearRefreshToken: "refresh_new",
 			});
 
 			// repositories should still be empty
@@ -608,10 +608,10 @@ describe("SelfAuthCommand", () => {
 					repositories: [],
 					workspaceCredentials: [
 						{
-							id: "ws-existing",
-							name: "Existing Workspace",
-							token: "old_token",
-							refreshToken: "old_refresh",
+							linearWorkspaceId: "ws-existing",
+							linearWorkspaceName: "Existing Workspace",
+							linearToken: "old_token",
+							linearRefreshToken: "old_refresh",
 						},
 					],
 				}),
@@ -665,10 +665,10 @@ describe("SelfAuthCommand", () => {
 			// workspaceCredentials should be updated (not duplicated)
 			expect(writtenConfig.workspaceCredentials).toHaveLength(1);
 			expect(writtenConfig.workspaceCredentials[0]).toEqual({
-				id: "ws-existing",
-				name: "Updated Workspace Name",
-				token: "lin_oauth_updated",
-				refreshToken: "refresh_updated",
+				linearWorkspaceId: "ws-existing",
+				linearWorkspaceName: "Updated Workspace Name",
+				linearToken: "lin_oauth_updated",
+				linearRefreshToken: "refresh_updated",
 			});
 		});
 	});

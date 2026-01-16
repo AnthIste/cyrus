@@ -248,18 +248,18 @@ export class SelfAuthCommand extends BaseCommand {
 
 		// Update or add workspace credentials
 		const existingCredential = config.workspaceCredentials.find(
-			(w) => w.id === workspace.id,
+			(w) => w.linearWorkspaceId === workspace.id,
 		);
 		if (existingCredential) {
-			existingCredential.token = tokens.accessToken;
-			existingCredential.refreshToken = tokens.refreshToken;
-			existingCredential.name = workspace.name;
+			existingCredential.linearToken = tokens.accessToken;
+			existingCredential.linearRefreshToken = tokens.refreshToken;
+			existingCredential.linearWorkspaceName = workspace.name;
 		} else {
 			config.workspaceCredentials.push({
-				id: workspace.id,
-				name: workspace.name,
-				token: tokens.accessToken,
-				refreshToken: tokens.refreshToken,
+				linearWorkspaceId: workspace.id,
+				linearWorkspaceName: workspace.name,
+				linearToken: tokens.accessToken,
+				linearRefreshToken: tokens.refreshToken,
 			});
 		}
 

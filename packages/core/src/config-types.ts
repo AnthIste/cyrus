@@ -33,9 +33,20 @@ export type OAuthCallbackHandler = (
 ) => Promise<void>;
 
 /**
+ * Linear OAuth credentials for a workspace.
+ * This type is shared between workspace-level credentials and repository-level credentials.
+ */
+export interface LinearCredentials {
+	linearWorkspaceId: string; // Linear workspace/organization ID
+	linearWorkspaceName?: string; // Linear workspace display name
+	linearToken: string; // Linear OAuth access token
+	linearRefreshToken?: string; // Linear OAuth refresh token
+}
+
+/**
  * Configuration for a single repository/workspace pair
  */
-export interface RepositoryConfig {
+export interface RepositoryConfig extends LinearCredentials {
 	// Repository identification
 	id: string; // Unique identifier for this repo config
 	name: string; // Display name (e.g., "Frontend App")
@@ -45,11 +56,7 @@ export interface RepositoryConfig {
 	baseBranch: string; // Branch to create worktrees from (main, master, etc.)
 	githubUrl?: string; // GitHub repository URL (e.g., "https://github.com/org/repo") - used for Linear select signal
 
-	// Linear configuration
-	linearWorkspaceId: string; // Linear workspace/team ID
-	linearWorkspaceName?: string; // Linear workspace display name (optional, for UI)
-	linearToken: string; // OAuth token for this Linear workspace
-	linearRefreshToken?: string; // OAuth refresh token for automatic token renewal
+	// Linear routing configuration (credentials inherited from LinearCredentials)
 	teamKeys?: string[]; // Linear team keys for routing (e.g., ["CEE", "BOOK"])
 	routingLabels?: string[]; // Linear labels for routing issues to this repository (e.g., ["backend", "api"])
 	projectKeys?: string[]; // Linear project names for routing (e.g., ["Mobile App", "API"])
@@ -219,13 +226,10 @@ export interface EdgeWorkerConfig {
  * Workspace-level Linear credentials stored independently of repositories.
  * This allows credentials to be saved even when no repositories are configured,
  * enabling the self-add-repo command to work for new users.
+ *
+ * This is an alias for LinearCredentials for semantic clarity at the config level.
  */
-export interface WorkspaceCredentials {
-	id: string; // Linear workspace/organization ID
-	name: string; // Linear workspace display name
-	token: string; // Linear OAuth access token
-	refreshToken?: string; // Linear OAuth refresh token
-}
+export type WorkspaceCredentials = LinearCredentials;
 
 /**
  * Edge configuration containing all repositories and global settings

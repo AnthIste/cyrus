@@ -36,6 +36,7 @@ export type {
 export type {
 	EdgeConfig,
 	EdgeWorkerConfig,
+	LinearCredentials,
 	OAuthCallbackHandler,
 	RepositoryConfig,
 	WorkspaceCredentials,
