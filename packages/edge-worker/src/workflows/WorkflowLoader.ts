@@ -55,7 +55,10 @@ export interface WorkflowLoaderConfig {
  * - Manual refresh capability
  */
 export class WorkflowLoader {
-	private readonly config: Required<Omit<WorkflowLoaderConfig, "cyrusHome">> & {
+	private readonly config: {
+		source: string;
+		branch: string;
+		path: string;
 		cyrusHome: string | undefined;
 	};
 	private readonly parser: WorkflowParser;
