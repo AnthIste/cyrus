@@ -9,6 +9,7 @@ This changelog documents internal development changes, refactors, tooling update
 - Added WorkflowParser class for parsing and validating YAML workflow files and converting them to internal ProcedureDefinition format ([RUB-68](https://linear.app/rbakker/issue/RUB-68), [#4](https://github.com/AnthIste/cyrus/pull/4))
 - Added WorkflowLoader class for discovering and loading workflows from local directories or Git repositories ([RUB-69](https://linear.app/rbakker/issue/RUB-69), [#5](https://github.com/AnthIste/cyrus/pull/5))
 - Integrated WorkflowLoader into EdgeWorker startup with `workflowsRepository` config option, enabling external workflows to be merged with built-in procedures ([RUB-71](https://linear.app/rbakker/issue/RUB-71), [#6](https://github.com/AnthIste/cyrus/pull/6))
+- Enhanced ProcedureAnalyzer with frontmatter-aware workflow selection, supporting label-based matching, priority precedence, and dynamic AI prompts built from workflow metadata ([RUB-72](https://linear.app/rbakker/issue/RUB-72), [#7](https://github.com/AnthIste/cyrus/pull/7))
 
 ## [0.2.13] - 2026-01-15
 

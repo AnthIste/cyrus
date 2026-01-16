@@ -425,6 +425,13 @@ export class EdgeWorker extends EventEmitter {
 				registeredCount++;
 			}
 
+			// Set workflow definitions for frontmatter-aware selection
+			// This enables direct workflow selection using metadata (descriptions, triggers, etc.)
+			const workflowDefinitions = this.workflowLoader.getAllWorkflows();
+			if (workflowDefinitions.length > 0) {
+				this.procedureAnalyzer.setWorkflows(workflowDefinitions);
+			}
+
 			if (registeredCount > 0) {
 				console.log(
 					`[EdgeWorker] Loaded ${registeredCount} external workflow(s) from ${workflowsConfig.source}`,
@@ -1821,15 +1828,6 @@ export class EdgeWorker extends EventEmitter {
 		// Lowercase labels for case-insensitive comparison
 		const lowercaseLabels = labels.map((label) => label.toLowerCase());
 
-		// Check for label overrides BEFORE AI routing
-		const debuggerConfig = repository.labelPrompts?.debugger;
-		const debuggerLabels = Array.isArray(debuggerConfig)
-			? debuggerConfig
-			: debuggerConfig?.labels;
-		const hasDebuggerLabel = debuggerLabels?.some((label) =>
-			lowercaseLabels.includes(label.toLowerCase()),
-		);
-
 		// ALWAYS check for 'orchestrator' label (case-insensitive) regardless of EdgeConfig
 		// This is a hardcoded rule: any issue with 'orchestrator'/'Orchestrator' label
 		// goes to orchestrator procedure
@@ -1863,20 +1861,9 @@ export class EdgeWorker extends EventEmitter {
 		let finalProcedure: ProcedureDefinition;
 		let finalClassification: RequestClassification;
 
-		// If labels indicate a specific procedure, use that instead of AI routing
-		if (hasDebuggerLabel) {
-			const debuggerProcedure =
-				this.procedureAnalyzer.getProcedure("debugger-full");
-			if (!debuggerProcedure) {
-				throw new Error("debugger-full procedure not found in registry");
-			}
-			finalProcedure = debuggerProcedure;
-			finalClassification = "debugger";
-			console.log(
-				`[EdgeWorker] Using debugger-full procedure due to debugger label (skipping AI routing)`,
-			);
-		} else if (hasGraphiteOrchestratorLabels) {
-			// Graphite-orchestrator takes precedence over regular orchestrator when both labels present
+		// Special case: Graphite-orchestrator requires specific system prompt handling
+		// This is checked first because it needs both graphite AND orchestrator labels
+		if (hasGraphiteOrchestratorLabels) {
 			const orchestratorProcedure =
 				this.procedureAnalyzer.getProcedure("orchestrator-full");
 			if (!orchestratorProcedure) {
@@ -1888,32 +1875,27 @@ export class EdgeWorker extends EventEmitter {
 			console.log(
 				`[EdgeWorker] Using orchestrator-full procedure with graphite-orchestrator prompt (graphite + orchestrator labels)`,
 			);
-		} else if (hasOrchestratorLabel) {
-			const orchestratorProcedure =
-				this.procedureAnalyzer.getProcedure("orchestrator-full");
-			if (!orchestratorProcedure) {
-				throw new Error("orchestrator-full procedure not found in registry");
-			}
-			finalProcedure = orchestratorProcedure;
-			finalClassification = "orchestrator";
-			console.log(
-				`[EdgeWorker] Using orchestrator-full procedure due to orchestrator label (skipping AI routing)`,
-			);
 		} else {
-			// No label override - use AI routing
+			// Use workflow-aware selection (handles label matching and AI routing)
 			const issueDescription =
 				`${issue.title}\n\n${fullIssue.description || ""}`.trim();
-			const routingDecision =
-				await this.procedureAnalyzer.determineRoutine(issueDescription);
+
+			// Use selectWorkflow for frontmatter-aware routing (or falls back to classification)
+			// Pass the already-fetched labels for label-based workflow selection
+			const routingDecision = await this.procedureAnalyzer.selectWorkflow(
+				issueDescription,
+				labels,
+			);
 			finalProcedure = routingDecision.procedure;
 			finalClassification = routingDecision.classification;
 
-			// Log AI routing decision
+			// Log routing decision
 			console.log(
-				`[EdgeWorker] AI routing decision for ${linearAgentActivitySessionId}:`,
+				`[EdgeWorker] Workflow routing decision for ${linearAgentActivitySessionId}:`,
 			);
+			console.log(`  Selection mode: ${routingDecision.selectionMode}`);
+			console.log(`  Workflow: ${routingDecision.workflowName}`);
 			console.log(`  Classification: ${routingDecision.classification}`);
-			console.log(`  Procedure: ${finalProcedure.name}`);
 			console.log(`  Reasoning: ${routingDecision.reasoning}`);
 		}
 
@@ -5728,19 +5710,22 @@ ${input.userComment}
 			linearAgentActivitySessionId,
 		);
 
-		// Fetch full issue and labels to check for Orchestrator label override
+		// Fetch full issue and labels for workflow-aware routing
 		const issueTracker = this.issueTrackers.get(repository.id);
+		let labelNames: string[] = [];
 		let hasOrchestratorLabel = false;
 
 		if (issueTracker) {
 			try {
 				const fullIssue = await issueTracker.fetchIssue(session.issueId);
-				const labels = await this.fetchIssueLabels(fullIssue);
+				labelNames = await this.fetchIssueLabels(fullIssue);
+
+				// Lowercase labels for case-insensitive comparison
+				const lowercaseLabels = labelNames.map((label) => label.toLowerCase());
 
 				// ALWAYS check for 'orchestrator' label (case-insensitive) regardless of EdgeConfig
 				// This is a hardcoded rule: any issue with 'orchestrator'/'Orchestrator' label
 				// goes to orchestrator procedure
-				const lowercaseLabels = labels.map((label) => label.toLowerCase());
 				const hasHardcodedOrchestratorLabel =
 					lowercaseLabels.includes("orchestrator");
 
@@ -5769,6 +5754,7 @@ ${input.userComment}
 		let finalClassification: RequestClassification;
 
 		// If Orchestrator label is present, ALWAYS use orchestrator-full procedure
+		// This is the backward-compatible behavior that preserves hardcoded orchestrator override
 		if (hasOrchestratorLabel) {
 			const orchestratorProcedure =
 				this.procedureAnalyzer.getProcedure("orchestrator-full");
@@ -5781,19 +5767,21 @@ ${input.userComment}
 				`[EdgeWorker] Using orchestrator-full procedure due to Orchestrator label (skipping AI routing)`,
 			);
 		} else {
-			// No Orchestrator label - use AI routing based on prompt content
-			const routingDecision = await this.procedureAnalyzer.determineRoutine(
+			// Use workflow-aware selection (handles label matching and AI routing)
+			const routingDecision = await this.procedureAnalyzer.selectWorkflow(
 				promptBody.trim(),
+				labelNames,
 			);
 			selectedProcedure = routingDecision.procedure;
 			finalClassification = routingDecision.classification;
 
-			// Log AI routing decision
+			// Log routing decision
 			console.log(
 				`[EdgeWorker] AI routing decision for ${linearAgentActivitySessionId}:`,
 			);
+			console.log(`  Selection mode: ${routingDecision.selectionMode}`);
+			console.log(`  Workflow: ${routingDecision.workflowName}`);
 			console.log(`  Classification: ${routingDecision.classification}`);
-			console.log(`  Procedure: ${selectedProcedure.name}`);
 			console.log(`  Reasoning: ${routingDecision.reasoning}`);
 		}
 
