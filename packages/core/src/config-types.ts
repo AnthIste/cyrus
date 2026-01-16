@@ -165,6 +165,35 @@ export interface EdgeWorkerConfig {
 	// Cyrus home directory
 	cyrusHome: string;
 
+	// External workflow loading configuration
+	/**
+	 * Configuration for loading external workflows from a local directory or Git repository.
+	 * When configured, external workflows will be merged with built-in workflows, with
+	 * external workflows taking precedence by name.
+	 */
+	workflowsRepository?: {
+		/**
+		 * Source for workflows. Can be:
+		 * - Local filesystem path (e.g., "/path/to/workflows")
+		 * - Git HTTPS URL (e.g., "https://github.com/org/repo.git")
+		 * - Git SSH URL (e.g., "git@github.com:org/repo.git")
+		 */
+		source: string;
+
+		/**
+		 * Git branch to use. Only applies when source is a Git URL.
+		 * @default "main"
+		 */
+		branch?: string;
+
+		/**
+		 * Subdirectory within the repository containing workflow files.
+		 * This is where YAML workflow files and prompt files are located.
+		 * @default "workflows/"
+		 */
+		path?: string;
+	};
+
 	// Agent configuration (for CLI mode)
 	agentHandle?: string; // The name/handle the agent responds to (e.g., "john", "cyrus")
 	agentUserId?: string; // The user ID of the agent (for CLI mode)
