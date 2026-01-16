@@ -182,6 +182,8 @@ For reliable cross-repository routing, prefer Description Tags as they are expli
 
 <available_repositories>
   <repository name="Frontend App" (current)>
+    <vcs_type>github</vcs_type>
+    <repo_url>https://github.com/myorg/frontend-app</repo_url>
     <github_url>https://github.com/myorg/frontend-app</github_url>
     <routing_methods>
     - Description tag: Add \`[repo=myorg/frontend-app]\` to sub-issue description
@@ -190,6 +192,8 @@ For reliable cross-repository routing, prefer Description Tags as they are expli
     </routing_methods>
   </repository>
   <repository name="Backend API">
+    <vcs_type>github</vcs_type>
+    <repo_url>https://github.com/myorg/backend-api</repo_url>
     <github_url>https://github.com/myorg/backend-api</github_url>
     <routing_methods>
     - Description tag: Add \`[repo=myorg/backend-api]\` to sub-issue description
@@ -373,6 +377,142 @@ Check routing context
 
 <user_comment>
 Check workspace isolation
+</user_comment>`)
+			.expectPromptType("label-based")
+			.expectComponents("issue-context", "user-comment")
+			.verify();
+	});
+
+	it("should include Azure DevOps context for azure-devops repositories", async () => {
+		const githubRepo = {
+			id: "repo-github-123",
+			name: "GitHub Repo",
+			repositoryPath: "/test/github",
+			workspaceBaseDir: "/test/workspace",
+			linearWorkspaceId: "test-workspace-ado",
+			linearToken: "test-token-123",
+			baseBranch: "main",
+			githubUrl: "https://github.com/myorg/github-repo",
+			routingLabels: ["github"],
+			teamKeys: ["GH"],
+			labelPrompts: {
+				orchestrator: { labels: ["Orchestrator"] },
+			},
+		};
+
+		const azureRepo = {
+			id: "repo-azure-456",
+			name: "Azure Repo",
+			repositoryPath: "/test/azure",
+			workspaceBaseDir: "/test/workspace",
+			linearWorkspaceId: "test-workspace-ado",
+			linearToken: "test-token-456",
+			baseBranch: "main",
+			vcsType: "azure-devops" as const,
+			repoUrl: "https://dev.azure.com/myorg/MyProject/_git/azure-repo",
+			azureDevOps: {
+				organization: "myorg",
+				project: "MyProject",
+				repository: "azure-repo",
+			},
+			routingLabels: ["azure"],
+			teamKeys: ["AZ"],
+		};
+
+		const worker = createTestWorker([githubRepo, azureRepo]);
+
+		const session = {
+			issueId: "issue-ado",
+			workspace: { path: "/test" },
+			metadata: {},
+		};
+
+		const issue = {
+			id: "issue-ado",
+			identifier: "GH-100",
+			title: "Cross-platform feature",
+			description: "Feature spanning GitHub and Azure DevOps",
+		};
+
+		await scenario(worker)
+			.newSession()
+			.assignmentBased()
+			.withSession(session)
+			.withIssue(issue)
+			.withRepository(githubRepo)
+			.withUserComment("Orchestrate this cross-platform feature")
+			.withLabels("Orchestrator")
+			.expectUserPrompt(`<git_context>
+<repository>GitHub Repo</repository>
+<base_branch>main</base_branch>
+</git_context>
+
+<linear_issue>
+<id>issue-ado</id>
+<identifier>GH-100</identifier>
+<title>Cross-platform feature</title>
+<description>Feature spanning GitHub and Azure DevOps</description>
+<url></url>
+<assignee>
+<id></id>
+<name></name>
+</assignee>
+</linear_issue>
+
+<workspace_context>
+<teams>
+
+</teams>
+<labels>
+
+</labels>
+</workspace_context>
+
+<repository_routing_context>
+<description>
+When creating sub-issues that should be handled in a DIFFERENT repository, use one of these routing methods.
+
+**IMPORTANT - Routing Priority Order:**
+The system evaluates routing methods in this strict priority order. The FIRST match wins:
+
+1. **Description Tag (Priority 1 - Highest, Recommended)**: Add \`[repo=org/repo-name]\` or \`[repo=repo-name]\` to the sub-issue description. This is the most explicit and reliable method.
+2. **Routing Labels (Priority 2)**: Apply a label configured to route to the target repository.
+3. **Project Assignment (Priority 3)**: Add the issue to a project that routes to the target repository.
+4. **Team Selection (Priority 4 - Lowest)**: Create the issue in a Linear team that routes to the target repository.
+
+For reliable cross-repository routing, prefer Description Tags as they are explicit and unambiguous.
+</description>
+
+<available_repositories>
+  <repository name="GitHub Repo" (current)>
+    <vcs_type>github</vcs_type>
+    <repo_url>https://github.com/myorg/github-repo</repo_url>
+    <github_url>https://github.com/myorg/github-repo</github_url>
+    <routing_methods>
+    - Description tag: Add \`[repo=myorg/github-repo]\` to sub-issue description
+    - Routing labels: "github"
+    - Team keys: "GH" (create issue in this team)
+    </routing_methods>
+  </repository>
+  <repository name="Azure Repo">
+    <vcs_type>azure-devops</vcs_type>
+    <repo_url>https://dev.azure.com/myorg/MyProject/_git/azure-repo</repo_url>
+    <azure_devops>
+      <organization>myorg</organization>
+      <project>MyProject</project>
+      <repository>azure-repo</repository>
+    </azure_devops>
+    <routing_methods>
+    - Description tag: Add \`[repo=myorg/MyProject/_git/azure-repo]\` to sub-issue description
+    - Routing labels: "azure"
+    - Team keys: "AZ" (create issue in this team)
+    </routing_methods>
+  </repository>
+</available_repositories>
+</repository_routing_context>
+
+<user_comment>
+Orchestrate this cross-platform feature
 </user_comment>`)
 			.expectPromptType("label-based")
 			.expectComponents("issue-context", "user-comment")

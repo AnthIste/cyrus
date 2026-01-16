@@ -4,6 +4,9 @@ This changelog documents internal development changes, refactors, tooling update
 
 ## [Unreleased]
 
+### Added
+- **Azure DevOps VCS platform support** - Extended `RepositoryConfig` with `vcsType`, `repoUrl`, and `azureDevOps` fields. Added subroutine variant system for platform-specific prompt resolution. Created `changelog-update.azure-devops.md` and `gh-pr.azure-devops.md` as Azure DevOps PR variants. Updated EdgeWorker routing context to include `<vcs_type>` and `<repo_url>` tags. ([RUB-62](https://linear.app/rbakker/issue/RUB-62), [#1](https://github.com/AnthIste/cyrus/pull/1))
+
 ## [0.2.13] - 2026-01-15
 
 (No internal changes in this release)

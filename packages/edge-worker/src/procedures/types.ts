@@ -2,6 +2,8 @@
  * Type definitions for the procedure analysis system
  */
 
+import type { VcsType } from "cyrus-core";
+
 /**
  * Definition of a single subroutine in a procedure
  */
@@ -11,6 +13,13 @@ export interface SubroutineDefinition {
 
 	/** Path to the prompt file (relative to edge-worker/src/prompts/) */
 	promptPath: string;
+
+	/**
+	 * Platform-specific prompt path variants.
+	 * When loading the subroutine, if a variant exists for the current VCS type,
+	 * it will be used instead of the default promptPath.
+	 */
+	variants?: Partial<Record<VcsType, string>>;
 
 	/** Whether this subroutine should run in single-turn mode (maxTurns: 1) */
 	singleTurn?: boolean;

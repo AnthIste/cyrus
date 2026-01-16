@@ -136,6 +136,8 @@ IMPORTANT: Respond with ONLY the classification word, nothing else.`;
 
 	/**
 	 * Analyze a request and determine which procedure to use
+	 *
+	 * @param requestText - The request text to classify
 	 */
 	async determineRoutine(
 		requestText: string,

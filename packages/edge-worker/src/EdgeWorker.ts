@@ -40,6 +40,7 @@ import type {
 	SerializableEdgeWorkerState,
 	SerializedCyrusAgentSession,
 	SerializedCyrusAgentSessionEntry,
+	VcsType,
 	Webhook,
 	WebhookAgentSession,
 	WebhookComment,
@@ -751,12 +752,13 @@ export class EdgeWorker extends EventEmitter {
 			`[Subroutine Transition] Next subroutine: ${nextSubroutine.name}`,
 		);
 
-		// Load subroutine prompt
+		// Load subroutine prompt (with VCS-specific variant resolution)
 		let subroutinePrompt: string | null;
 		try {
 			subroutinePrompt = await this.loadSubroutinePrompt(
 				nextSubroutine,
 				this.config.linearWorkspaceSlug,
+				repo.vcsType,
 			);
 			if (!subroutinePrompt) {
 				// Fallback if loadSubroutinePrompt returns null
@@ -861,10 +863,11 @@ export class EdgeWorker extends EventEmitter {
 		}
 
 		try {
-			// Load the verifications prompt
+			// Load the verifications prompt (with VCS-specific variant resolution)
 			const subroutinePrompt = await this.loadSubroutinePrompt(
 				verificationsSubroutine,
 				this.config.linearWorkspaceSlug,
+				repo.vcsType,
 			);
 
 			if (!subroutinePrompt) {
@@ -3038,6 +3041,61 @@ export class EdgeWorker extends EventEmitter {
 	}
 
 	/**
+	 * Extract a repository identifier for use in description tags.
+	 * For Azure DevOps: org/project/_git/repo
+	 * For GitHub: org/repo
+	 * Fallback: repo name
+	 */
+	private extractRepoIdentifier(repo: RepositoryConfig): string {
+		if (repo.azureDevOps) {
+			const { organization, project, repository } = repo.azureDevOps;
+			return `${organization}/${project}/_git/${repository}`;
+		}
+
+		if (repo.githubUrl) {
+			const match = repo.githubUrl.match(/github\.com\/([^/]+\/[^/]+)/);
+			return match?.[1] || repo.name;
+		}
+
+		if (repo.repoUrl) {
+			// Generic URL: strip protocol and domain
+			return repo.repoUrl.replace(/^https?:\/\/[^/]+\//, "");
+		}
+
+		return repo.name;
+	}
+
+	/**
+	 * Build VCS-specific context tags for a repository.
+	 * Returns an array of XML tag lines (without leading whitespace).
+	 */
+	private buildVcsContextTags(repo: RepositoryConfig): string[] {
+		const tags: string[] = [];
+		const vcsType = repo.vcsType || "github";
+		const repoUrl = repo.repoUrl || repo.githubUrl || "N/A";
+
+		tags.push(`<vcs_type>${vcsType}</vcs_type>`);
+		tags.push(`<repo_url>${repoUrl}</repo_url>`);
+
+		// GitHub-specific: backward-compatible github_url tag
+		if (vcsType === "github" && repo.githubUrl) {
+			tags.push(`<github_url>${repo.githubUrl}</github_url>`);
+		}
+
+		// Azure DevOps-specific context
+		if (repo.azureDevOps) {
+			const { organization, project, repository } = repo.azureDevOps;
+			tags.push(`<azure_devops>`);
+			tags.push(`  <organization>${organization}</organization>`);
+			tags.push(`  <project>${project}</project>`);
+			tags.push(`  <repository>${repository}</repository>`);
+			tags.push(`</azure_devops>`);
+		}
+
+		return tags;
+	}
+
+	/**
 	 * Generate routing context for orchestrator mode
 	 *
 	 * This provides the orchestrator with information about available repositories
@@ -3066,9 +3124,7 @@ export class EdgeWorker extends EventEmitter {
 			const routingMethods: string[] = [];
 
 			// Description tag routing (always available)
-			const repoIdentifier = repo.githubUrl
-				? repo.githubUrl.replace("https://github.com/", "")
-				: repo.name;
+			const repoIdentifier = this.extractRepoIdentifier(repo);
 			routingMethods.push(
 				`    - Description tag: Add \`[repo=${repoIdentifier}]\` to sub-issue description`,
 			);
@@ -3097,8 +3153,13 @@ export class EdgeWorker extends EventEmitter {
 			const currentMarker =
 				repo.id === currentRepository.id ? " (current)" : "";
 
+			// Build VCS context tags
+			const vcsContextTags = this.buildVcsContextTags(repo)
+				.map((tag) => `    ${tag}`)
+				.join("\n");
+
 			return `  <repository name="${repo.name}"${currentMarker}>
-    <github_url>${repo.githubUrl || "N/A"}</github_url>
+${vcsContextTags}
     <routing_methods>
 ${routingMethods.join("\n")}
     </routing_methods>
@@ -4719,7 +4780,7 @@ ${newComment ? `New comment to address:\n${newComment.body}\n\n` : ""}Please ana
 		parts.push(issueContext.prompt);
 		components.push("issue-context");
 
-		// 4. Load and append initial subroutine prompt
+		// 4. Load and append initial subroutine prompt (with VCS-specific variant resolution)
 		const currentSubroutine = this.procedureAnalyzer.getCurrentSubroutine(
 			input.session,
 		);
@@ -4728,6 +4789,7 @@ ${newComment ? `New comment to address:\n${newComment.body}\n\n` : ""}Please ana
 			const subroutinePrompt = await this.loadSubroutinePrompt(
 				currentSubroutine,
 				this.config.linearWorkspaceSlug,
+				input.repository.vcsType,
 			);
 			if (subroutinePrompt) {
 				parts.push(subroutinePrompt);
@@ -4835,23 +4897,33 @@ ${input.userComment}
 	/**
 	 * Load a subroutine prompt file
 	 * Extracted helper to make prompt assembly more readable
+	 *
+	 * @param subroutine - The subroutine definition
+	 * @param workspaceSlug - Optional Linear workspace slug for template substitution
+	 * @param vcsType - Optional VCS type for resolving platform-specific prompt variants
 	 */
 	private async loadSubroutinePrompt(
 		subroutine: SubroutineDefinition,
 		workspaceSlug?: string,
+		vcsType?: VcsType,
 	): Promise<string | null> {
 		// Skip loading for "primary" - it's a placeholder that doesn't have a file
 		if (subroutine.promptPath === "primary") {
 			return null;
 		}
 
+		// Resolve prompt path: use variant if available for the current VCS type
+		let promptPath = subroutine.promptPath;
+		if (vcsType && subroutine.variants?.[vcsType]) {
+			promptPath = subroutine.variants[vcsType];
+			console.log(
+				`[EdgeWorker] Using ${vcsType} variant for ${subroutine.name}: ${promptPath}`,
+			);
+		}
+
 		const __filename = fileURLToPath(import.meta.url);
 		const __dirname = dirname(__filename);
-		const subroutinePromptPath = join(
-			__dirname,
-			"prompts",
-			subroutine.promptPath,
-		);
+		const subroutinePromptPath = join(__dirname, "prompts", promptPath);
 
 		try {
 			let prompt = await readFile(subroutinePromptPath, "utf-8");

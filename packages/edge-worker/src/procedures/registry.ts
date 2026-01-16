@@ -49,12 +49,18 @@ export const SUBROUTINES = {
 	ghPr: {
 		name: "gh-pr",
 		promptPath: "subroutines/gh-pr.md",
-		description: "Create or update GitHub Pull Request",
+		variants: {
+			"azure-devops": "subroutines/gh-pr.azure-devops.md",
+		},
+		description: "Create or update Pull Request",
 	},
 	changelogUpdate: {
 		name: "changelog-update",
 		promptPath: "subroutines/changelog-update.md",
-		description: "Update changelog (only if changelog files exist)",
+		variants: {
+			"azure-devops": "subroutines/changelog-update.azure-devops.md",
+		},
+		description: "Update changelog and create draft PR",
 	},
 	conciseSummary: {
 		name: "concise-summary",
