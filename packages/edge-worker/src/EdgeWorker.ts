@@ -3110,6 +3110,13 @@ export class EdgeWorker extends EventEmitter {
 			const vcsType = repo.vcsType || "github";
 			const repoUrl = repo.repoUrl || repo.githubUrl || "N/A";
 
+			// Build GitHub URL tag for backward compatibility (only for GitHub repos)
+			const githubUrlTag =
+				vcsType === "github" && repo.githubUrl
+					? `
+    <github_url>${repo.githubUrl}</github_url>`
+					: "";
+
 			// Build Azure DevOps context if available
 			const azureContext = repo.azureDevOps
 				? `
@@ -3122,7 +3129,7 @@ export class EdgeWorker extends EventEmitter {
 
 			return `  <repository name="${repo.name}"${currentMarker}>
     <vcs_type>${vcsType}</vcs_type>
-    <repo_url>${repoUrl}</repo_url>${azureContext}
+    <repo_url>${repoUrl}</repo_url>${githubUrlTag}${azureContext}
     <routing_methods>
 ${routingMethods.join("\n")}
     </routing_methods>
