@@ -36,8 +36,6 @@ export interface ProcedureAnalyzerConfig {
 export class ProcedureAnalyzer {
 	private analysisRunner: ISimpleAgentRunner<RequestClassification>;
 	private procedures: Map<string, ProcedureDefinition> = new Map();
-	/** Workflow definitions for label-based matching */
-	private workflowDefinitions: WorkflowDefinition[] = [];
 
 	constructor(config: ProcedureAnalyzerConfig) {
 		// Determine which runner to use
@@ -197,87 +195,27 @@ IMPORTANT: Respond with ONLY the classification word, nothing else.`;
 	}
 
 	/**
-	 * Set workflow definitions for label-based matching.
-	 * Workflows provide additional label→procedure mappings beyond built-in ones.
-	 */
-	setWorkflows(workflows: WorkflowDefinition[]): void {
-		this.workflowDefinitions = workflows;
-		if (workflows.length > 0) {
-			console.log(
-				`[ProcedureAnalyzer] Loaded ${workflows.length} external workflow definitions`,
-			);
-		}
-	}
-
-	/**
-	 * Check if external workflows are loaded
-	 */
-	hasWorkflows(): boolean {
-		return this.workflowDefinitions.length > 0;
-	}
-
-	/**
-	 * Get the list of loaded workflow names
-	 */
-	getWorkflowNames(): string[] {
-		return this.workflowDefinitions.map((w) => w.name);
-	}
-
-	/**
-	 * Select a workflow based on issue labels and content.
+	 * Match workflows by issue labels and return a routing decision.
 	 *
-	 * Priority order:
-	 * 1. Label-based matching against external workflow triggers (if workflows loaded)
-	 * 2. AI-based classification routing (fallback)
-	 *
-	 * Note: Built-in label overrides (debugger, orchestrator) should be handled
-	 * by the caller (EdgeWorker) before calling this method.
-	 *
-	 * @param requestText - The issue title and description
-	 * @param issueLabels - Optional array of Linear issue labels
-	 * @returns WorkflowSelectionDecision with the selected workflow
-	 */
-	async selectWorkflow(
-		requestText: string,
-		issueLabels?: string[],
-	): Promise<WorkflowSelectionDecision> {
-		// Try label-based matching against external workflows
-		const labelMatch = this.matchWorkflowByLabels(issueLabels);
-		if (labelMatch) {
-			return labelMatch;
-		}
-
-		// Fall back to AI classification-based routing
-		const classificationResult = await this.determineRoutine(requestText);
-		return {
-			workflowName: classificationResult.procedure.name,
-			procedure: classificationResult.procedure,
-			selectionMode: "classification",
-			classification: classificationResult.classification,
-			reasoning: classificationResult.reasoning,
-		};
-	}
-
-	/**
-	 * Match workflows by Linear issue labels.
-	 *
-	 * Searches loaded workflows for label triggers that match the issue labels.
+	 * This is a pure function that takes workflows as a parameter.
 	 * When multiple workflows match, selects the one with highest priority.
 	 *
 	 * @param issueLabels - Labels from the Linear issue
-	 * @returns WorkflowSelectionDecision if a match is found, null otherwise
+	 * @param workflows - Workflow definitions to match against
+	 * @returns WorkflowSelectionDecision if a label match is found, null otherwise
 	 */
 	matchWorkflowByLabels(
-		issueLabels?: string[],
+		issueLabels: string[],
+		workflows: WorkflowDefinition[],
 	): WorkflowSelectionDecision | null {
-		if (!issueLabels || issueLabels.length === 0 || !this.hasWorkflows()) {
+		if (issueLabels.length === 0 || workflows.length === 0) {
 			return null;
 		}
 
 		const normalizedIssueLabels = issueLabels.map((l) => l.toLowerCase());
 
 		// Find workflows with matching labels, sorted by priority (highest first)
-		const matchingWorkflows = this.workflowDefinitions
+		const matchingWorkflows = workflows
 			.filter((w) => {
 				const triggerLabels = w.triggers?.labels;
 				if (!triggerLabels || triggerLabels.length === 0) {
@@ -307,32 +245,26 @@ IMPORTANT: Respond with ONLY the classification word, nothing else.`;
 			normalizedIssueLabels.includes(l.toLowerCase()),
 		);
 
+		// Infer classification from workflow
+		const classification =
+			selectedWorkflow.triggers?.classifications?.[0] ??
+			this.inferClassificationFromProcedure(selectedWorkflow.name);
+
 		return {
 			workflowName: selectedWorkflow.name,
 			procedure,
 			selectionMode: "direct",
-			classification: this.inferClassificationFromWorkflow(
-				selectedWorkflow.name,
-			),
-			reasoning: `Label-based match: issue labels [${matchedLabels?.join(", ")}] → workflow "${selectedWorkflow.name}"`,
+			classification,
+			reasoning: `Label-based match: [${matchedLabels?.join(", ")}] → "${selectedWorkflow.name}"`,
 		};
 	}
 
 	/**
-	 * Infer a classification from a workflow name for backward compatibility.
+	 * Infer a classification from a procedure name for backward compatibility.
 	 */
-	private inferClassificationFromWorkflow(
-		workflowName: string,
+	private inferClassificationFromProcedure(
+		procedureName: string,
 	): RequestClassification {
-		// Check if workflow has trigger classifications defined
-		const workflow = this.workflowDefinitions.find(
-			(w) => w.name === workflowName,
-		);
-		if (workflow?.triggers?.classifications?.[0]) {
-			return workflow.triggers.classifications[0];
-		}
-
-		// Map common workflow names to classifications
 		const nameToClassification: Record<string, RequestClassification> = {
 			"full-development": "code",
 			"simple-question": "question",
@@ -344,7 +276,7 @@ IMPORTANT: Respond with ONLY the classification word, nothing else.`;
 			release: "release",
 		};
 
-		return nameToClassification[workflowName] ?? "code";
+		return nameToClassification[procedureName] ?? "code";
 	}
 
 	/**

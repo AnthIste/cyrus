@@ -425,13 +425,6 @@ export class EdgeWorker extends EventEmitter {
 				registeredCount++;
 			}
 
-			// Set workflow definitions for frontmatter-aware selection
-			// This enables direct workflow selection using metadata (descriptions, triggers, etc.)
-			const workflowDefinitions = this.workflowLoader.getAllWorkflows();
-			if (workflowDefinitions.length > 0) {
-				this.procedureAnalyzer.setWorkflows(workflowDefinitions);
-			}
-
 			if (registeredCount > 0) {
 				console.log(
 					`[EdgeWorker] Loaded ${registeredCount} external workflow(s) from ${workflowsConfig.source}`,
@@ -1906,26 +1899,28 @@ export class EdgeWorker extends EventEmitter {
 				`[EdgeWorker] Using orchestrator-full procedure due to orchestrator label (skipping AI routing)`,
 			);
 		} else {
-			// No built-in label override - use workflow selection (label matching + AI fallback)
-			const issueDescription =
-				`${issue.title}\n\n${fullIssue.description || ""}`.trim();
-
-			const routingDecision = await this.procedureAnalyzer.selectWorkflow(
-				issueDescription,
+			// No built-in label override - try external workflow label matching, then AI routing
+			const workflows = this.workflowLoader?.getAllWorkflows() ?? [];
+			const labelMatch = this.procedureAnalyzer.matchWorkflowByLabels(
 				labels,
+				workflows,
 			);
-			finalProcedure = routingDecision.procedure;
-			finalClassification = routingDecision.classification;
 
-			// Log routing decision
-			console.log(
-				`[EdgeWorker] Routing decision for ${linearAgentActivitySessionId}:`,
-			);
-			console.log(`  Mode: ${routingDecision.selectionMode}`);
-			console.log(`  Procedure: ${routingDecision.workflowName}`);
-			console.log(`  Classification: ${routingDecision.classification}`);
-			if (routingDecision.reasoning) {
-				console.log(`  Reasoning: ${routingDecision.reasoning}`);
+			if (labelMatch) {
+				finalProcedure = labelMatch.procedure;
+				finalClassification = labelMatch.classification;
+				console.log(`[EdgeWorker] ${labelMatch.reasoning}`);
+			} else {
+				// No label match - use AI classification
+				const issueDescription =
+					`${issue.title}\n\n${fullIssue.description || ""}`.trim();
+				const routingDecision =
+					await this.procedureAnalyzer.determineRoutine(issueDescription);
+				finalProcedure = routingDecision.procedure;
+				finalClassification = routingDecision.classification;
+				console.log(
+					`[EdgeWorker] AI routing decision: ${routingDecision.classification} → ${finalProcedure.name}`,
+				);
 			}
 		}
 
@@ -5797,22 +5792,28 @@ ${input.userComment}
 				`[EdgeWorker] Using orchestrator-full procedure due to Orchestrator label (skipping AI routing)`,
 			);
 		} else {
-			// Use workflow-aware selection (handles label matching and AI routing)
-			const routingDecision = await this.procedureAnalyzer.selectWorkflow(
-				promptBody.trim(),
+			// Try external workflow label matching, then AI routing
+			const workflows = this.workflowLoader?.getAllWorkflows() ?? [];
+			const labelMatch = this.procedureAnalyzer.matchWorkflowByLabels(
 				labelNames,
+				workflows,
 			);
-			selectedProcedure = routingDecision.procedure;
-			finalClassification = routingDecision.classification;
 
-			// Log routing decision
-			console.log(
-				`[EdgeWorker] AI routing decision for ${linearAgentActivitySessionId}:`,
-			);
-			console.log(`  Selection mode: ${routingDecision.selectionMode}`);
-			console.log(`  Workflow: ${routingDecision.workflowName}`);
-			console.log(`  Classification: ${routingDecision.classification}`);
-			console.log(`  Reasoning: ${routingDecision.reasoning}`);
+			if (labelMatch) {
+				selectedProcedure = labelMatch.procedure;
+				finalClassification = labelMatch.classification;
+				console.log(`[EdgeWorker] ${labelMatch.reasoning}`);
+			} else {
+				// No label match - use AI classification
+				const routingDecision = await this.procedureAnalyzer.determineRoutine(
+					promptBody.trim(),
+				);
+				selectedProcedure = routingDecision.procedure;
+				finalClassification = routingDecision.classification;
+				console.log(
+					`[EdgeWorker] AI routing decision: ${routingDecision.classification} → ${selectedProcedure.name}`,
+				);
+			}
 		}
 
 		// Initialize procedure metadata in session (resets currentSubroutine)
