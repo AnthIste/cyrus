@@ -1,9 +1,9 @@
 /**
  * Loader for workflow definitions from local filesystem or Git repositories
  *
- * This class handles discovering, loading, and caching workflows from either
- * a local directory or a remote Git repository. It uses WorkflowParser to
- * parse and validate the YAML workflow files.
+ * This class handles discovering and loading workflows from either a local
+ * directory or a remote Git repository. It uses WorkflowParser to parse and
+ * validate the YAML workflow files.
  */
 
 import { execSync } from "node:child_process";
@@ -50,7 +50,7 @@ export interface WorkflowLoaderConfig {
  * - Manual refresh capability
  */
 export class WorkflowLoader {
-	private readonly config: Required<Omit<WorkflowLoaderConfig, "cacheEnabled">>;
+	private readonly config: Required<WorkflowLoaderConfig>;
 	private readonly parser: WorkflowParser;
 	private procedures = new Map<string, ProcedureDefinition>();
 	private workflows = new Map<string, WorkflowDefinition>();
