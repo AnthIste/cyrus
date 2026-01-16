@@ -1828,6 +1828,15 @@ export class EdgeWorker extends EventEmitter {
 		// Lowercase labels for case-insensitive comparison
 		const lowercaseLabels = labels.map((label) => label.toLowerCase());
 
+		// Check for label-based overrides BEFORE AI routing
+		const debuggerConfig = repository.labelPrompts?.debugger;
+		const debuggerLabels = Array.isArray(debuggerConfig)
+			? debuggerConfig
+			: debuggerConfig?.labels;
+		const hasDebuggerLabel = debuggerLabels?.some((label) =>
+			lowercaseLabels.includes(label.toLowerCase()),
+		);
+
 		// ALWAYS check for 'orchestrator' label (case-insensitive) regardless of EdgeConfig
 		// This is a hardcoded rule: any issue with 'orchestrator'/'Orchestrator' label
 		// goes to orchestrator procedure
@@ -1861,27 +1870,46 @@ export class EdgeWorker extends EventEmitter {
 		let finalProcedure: ProcedureDefinition;
 		let finalClassification: RequestClassification;
 
-		// Special case: Graphite-orchestrator requires specific system prompt handling
-		// This is checked first because it needs both graphite AND orchestrator labels
-		if (hasGraphiteOrchestratorLabels) {
+		// Label-based routing - check built-in overrides first (no AI needed)
+		if (hasDebuggerLabel) {
+			const debuggerProcedure =
+				this.procedureAnalyzer.getProcedure("debugger-full");
+			if (!debuggerProcedure) {
+				throw new Error("debugger-full procedure not found in registry");
+			}
+			finalProcedure = debuggerProcedure;
+			finalClassification = "debugger";
+			console.log(
+				`[EdgeWorker] Using debugger-full procedure due to debugger label (skipping AI routing)`,
+			);
+		} else if (hasGraphiteOrchestratorLabels) {
+			// Graphite-orchestrator takes precedence over regular orchestrator
 			const orchestratorProcedure =
 				this.procedureAnalyzer.getProcedure("orchestrator-full");
 			if (!orchestratorProcedure) {
 				throw new Error("orchestrator-full procedure not found in registry");
 			}
 			finalProcedure = orchestratorProcedure;
-			// Use orchestrator classification but the system prompt will be graphite-orchestrator
 			finalClassification = "orchestrator";
 			console.log(
 				`[EdgeWorker] Using orchestrator-full procedure with graphite-orchestrator prompt (graphite + orchestrator labels)`,
 			);
+		} else if (hasOrchestratorLabel) {
+			const orchestratorProcedure =
+				this.procedureAnalyzer.getProcedure("orchestrator-full");
+			if (!orchestratorProcedure) {
+				throw new Error("orchestrator-full procedure not found in registry");
+			}
+			finalProcedure = orchestratorProcedure;
+			finalClassification = "orchestrator";
+			console.log(
+				`[EdgeWorker] Using orchestrator-full procedure due to orchestrator label (skipping AI routing)`,
+			);
 		} else {
-			// Use workflow-aware selection (handles label matching and AI routing)
+			// No built-in label override - use workflow selection (label matching + AI fallback)
 			const issueDescription =
 				`${issue.title}\n\n${fullIssue.description || ""}`.trim();
 
-			// Use selectWorkflow for frontmatter-aware routing (or falls back to classification)
-			// Pass the already-fetched labels for label-based workflow selection
 			const routingDecision = await this.procedureAnalyzer.selectWorkflow(
 				issueDescription,
 				labels,
@@ -1891,12 +1919,14 @@ export class EdgeWorker extends EventEmitter {
 
 			// Log routing decision
 			console.log(
-				`[EdgeWorker] Workflow routing decision for ${linearAgentActivitySessionId}:`,
+				`[EdgeWorker] Routing decision for ${linearAgentActivitySessionId}:`,
 			);
-			console.log(`  Selection mode: ${routingDecision.selectionMode}`);
-			console.log(`  Workflow: ${routingDecision.workflowName}`);
+			console.log(`  Mode: ${routingDecision.selectionMode}`);
+			console.log(`  Procedure: ${routingDecision.workflowName}`);
 			console.log(`  Classification: ${routingDecision.classification}`);
-			console.log(`  Reasoning: ${routingDecision.reasoning}`);
+			if (routingDecision.reasoning) {
+				console.log(`  Reasoning: ${routingDecision.reasoning}`);
+			}
 		}
 
 		// Initialize procedure metadata in session with final decision
