@@ -10,35 +10,18 @@ import { execSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+import type { WorkflowSourceConfig } from "cyrus-core";
 import type { ProcedureDefinition } from "../procedures/types.js";
 import type { WorkflowCollection, WorkflowDefinition } from "./types.js";
 import { WorkflowParser } from "./WorkflowParser.js";
 
+// Re-export for convenience
+export type { WorkflowSourceConfig } from "cyrus-core";
+
 /**
  * Configuration for the WorkflowLoader
  */
-export interface WorkflowLoaderConfig {
-	/**
-	 * Source for workflows. Can be:
-	 * - Local filesystem path (e.g., "/path/to/workflows")
-	 * - Git HTTPS URL (e.g., "https://github.com/org/repo.git")
-	 * - Git SSH URL (e.g., "git@github.com:org/repo.git")
-	 */
-	source: string;
-
-	/**
-	 * Git branch to use. Only applies when source is a Git URL.
-	 * @default "main"
-	 */
-	branch?: string;
-
-	/**
-	 * Subdirectory within the repository containing workflow files.
-	 * This is where YAML workflow files and prompt files are located.
-	 * @default "workflows/"
-	 */
-	path?: string;
-
+export interface WorkflowLoaderConfig extends WorkflowSourceConfig {
 	/**
 	 * Cyrus home directory. Required for Git sources - repositories will be cloned to
 	 * {cyrusHome}/workflows/{repo-name}. Not used for local filesystem sources.
