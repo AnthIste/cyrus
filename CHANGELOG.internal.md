@@ -4,6 +4,9 @@ This changelog documents internal development changes, refactors, tooling update
 
 ## [Unreleased]
 
+### Added
+- Added TypeScript types and JSON Schema for YAML workflow definitions, enabling external workflow configuration ([RUB-67](https://linear.app/rbakker/issue/RUB-67), [#3](https://github.com/AnthIste/cyrus/pull/3))
+
 ## [0.2.13] - 2026-01-15
 
 (No internal changes in this release)

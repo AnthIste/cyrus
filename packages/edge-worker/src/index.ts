@@ -32,3 +32,11 @@ export {
 } from "./validation/index.js";
 export type { WorktreeIncludeLogger } from "./WorktreeIncludeService.js";
 export { WorktreeIncludeService } from "./WorktreeIncludeService.js";
+// Export workflow types for YAML workflow definitions
+export type {
+	SubroutineReference,
+	WorkflowCollection,
+	WorkflowDefinition,
+	WorkflowMatchResult,
+	WorkflowTriggers,
+} from "./workflows/index.js";
