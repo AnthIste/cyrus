@@ -4,6 +4,9 @@ This changelog documents internal development changes, refactors, tooling update
 
 ## [Unreleased]
 
+### Changed
+- Simplified credential types by removing `OptionalLinearCredentials` interface - `LinearCredentials` now has all optional fields (since it binds to JSON), and `RepositoryConfig` extends it directly. Uses `Required<Pick<>>` for `ResolvedLinearCredentials` to derive required fields. ([RUB-57](https://linear.app/rbakker/issue/RUB-57), [#2](https://github.com/AnthIste/cyrus/pull/2))
+
 ## [0.2.13] - 2026-01-15
 
 (No internal changes in this release)
