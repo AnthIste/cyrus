@@ -261,4 +261,24 @@ export interface EdgeConfig {
 	defaultModel?: string; // Default Claude model to use across all repositories
 	defaultFallbackModel?: string; // Default fallback model if primary model is unavailable
 	global_setup_script?: string; // Optional path to global setup script that runs for all repositories
+
+	/**
+	 * External workflows repository configuration.
+	 * Allows loading custom workflows from a local directory or Git repository.
+	 *
+	 * @example Local path
+	 * ```yaml
+	 * workflowsRepository:
+	 *   source: "~/.cyrus/custom-workflows"
+	 * ```
+	 *
+	 * @example Git repository
+	 * ```yaml
+	 * workflowsRepository:
+	 *   source: "git@github.com:myorg/cyrus-workflows.git"
+	 *   branch: main
+	 *   path: workflows/
+	 * ```
+	 */
+	workflowsRepository?: WorkflowSourceConfig;
 }
