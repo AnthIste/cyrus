@@ -24,6 +24,11 @@ export interface ProcedureAnalyzerConfig {
 	model?: string;
 	timeoutMs?: number;
 	runnerType?: SimpleRunnerType; // Default: "gemini"
+	/**
+	 * Additional procedures to register on initialization.
+	 * These take precedence over built-in procedures with the same name.
+	 */
+	additionalProcedures?: Map<string, ProcedureDefinition>;
 }
 
 export class ProcedureAnalyzer {
@@ -69,6 +74,13 @@ export class ProcedureAnalyzer {
 
 		// Load all predefined procedures from registry
 		this.loadPredefinedProcedures();
+
+		// Register any additional procedures (these override built-in procedures by name)
+		if (config.additionalProcedures) {
+			for (const [name, procedure] of config.additionalProcedures) {
+				this.procedures.set(name, procedure);
+			}
+		}
 	}
 
 	/**

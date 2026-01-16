@@ -6,6 +6,7 @@ export type {
 	EdgeWorkerConfig,
 	OAuthCallbackHandler,
 	RepositoryConfig,
+	WorkflowSourceConfig,
 	Workspace,
 } from "cyrus-core";
 export { AgentSessionManager } from "./AgentSessionManager.js";

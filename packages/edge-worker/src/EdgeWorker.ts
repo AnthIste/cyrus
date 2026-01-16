@@ -87,6 +87,7 @@ import {
 } from "./RepositoryRouter.js";
 import { SharedApplicationServer } from "./SharedApplicationServer.js";
 import type { AgentSessionData, EdgeWorkerEvents } from "./types.js";
+import { WorkflowLoader } from "./workflows/index.js";
 
 export declare interface EdgeWorker {
 	on<K extends keyof EdgeWorkerEvents>(
@@ -126,6 +127,8 @@ export class EdgeWorker extends EventEmitter {
 	private activeWebhookCount = 0; // Track number of webhooks currently being processed
 	/** Handler for AskUserQuestion tool invocations via Linear select signal */
 	private askUserQuestionHandler: AskUserQuestionHandler;
+	/** Workflow loader for external workflow definitions (optional) */
+	private workflowLoader?: WorkflowLoader;
 
 	constructor(config: EdgeWorkerConfig) {
 		super();
@@ -361,6 +364,9 @@ export class EdgeWorker extends EventEmitter {
 	 * Start the edge worker
 	 */
 	async start(): Promise<void> {
+		// Load external workflows if configured (before persisted state uses procedures)
+		await this.loadExternalWorkflows();
+
 		// Load persisted state for each repository
 		await this.loadPersistedState();
 
@@ -374,6 +380,73 @@ export class EdgeWorker extends EventEmitter {
 
 		// Start shared application server (this also starts Cloudflare tunnel if CLOUDFLARE_TOKEN is set)
 		await this.sharedApplicationServer.start();
+	}
+
+	/**
+	 * Load external workflows from configured repository and register them with the procedure analyzer.
+	 * External workflows take precedence over built-in workflows by name.
+	 */
+	private async loadExternalWorkflows(): Promise<void> {
+		const workflowsConfig = this.config.workflowsRepository;
+
+		if (!workflowsConfig) {
+			// No external workflows configured - use built-in only
+			return;
+		}
+
+		try {
+			// Initialize workflow loader
+			this.workflowLoader = new WorkflowLoader({
+				source: workflowsConfig.source,
+				branch: workflowsConfig.branch,
+				path: workflowsConfig.path,
+				cyrusHome: this.cyrusHome,
+			});
+
+			// Load workflows from the configured source
+			const externalProcedures = await this.workflowLoader.load();
+
+			// Check for any loading errors
+			const errors = this.workflowLoader.getErrors();
+			const errorCount = Object.keys(errors).length;
+
+			if (errorCount > 0) {
+				console.warn(`[EdgeWorker] ${errorCount} workflow loading error(s):`);
+				for (const [file, error] of Object.entries(errors)) {
+					console.warn(`  - ${file}: ${error}`);
+				}
+			}
+
+			// Register external workflows with the procedure analyzer
+			// These override built-in workflows with the same name
+			let registeredCount = 0;
+			for (const procedure of externalProcedures.values()) {
+				this.procedureAnalyzer.registerProcedure(procedure);
+				registeredCount++;
+			}
+
+			if (registeredCount > 0) {
+				console.log(
+					`[EdgeWorker] Loaded ${registeredCount} external workflow(s) from ${workflowsConfig.source}`,
+				);
+
+				// Log workflow names for debugging
+				const workflowNames = Array.from(externalProcedures.keys());
+				console.log(
+					`[EdgeWorker] External workflows: ${workflowNames.join(", ")}`,
+				);
+			} else if (errorCount === 0) {
+				console.log(
+					`[EdgeWorker] No workflows found in ${workflowsConfig.source}`,
+				);
+			}
+		} catch (error) {
+			// Log error but continue with built-in workflows
+			console.warn(
+				`[EdgeWorker] Failed to load external workflows, using built-in only:`,
+				error instanceof Error ? error.message : String(error),
+			);
+		}
 	}
 
 	/**
@@ -578,6 +651,12 @@ export class EdgeWorker extends EventEmitter {
 		// Clear event transport (no explicit cleanup needed, routes are removed when server stops)
 		this.linearEventTransport = null;
 		this.configUpdater = null;
+
+		// Clean up workflow loader if it was initialized
+		if (this.workflowLoader) {
+			this.workflowLoader.cleanup();
+			this.workflowLoader = undefined;
+		}
 
 		// Stop shared application server (this also stops Cloudflare tunnel if running)
 		await this.sharedApplicationServer.stop();
