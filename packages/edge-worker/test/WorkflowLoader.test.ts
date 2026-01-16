@@ -78,7 +78,6 @@ describe("WorkflowLoader", () => {
 				source: tempDir,
 				branch: "develop",
 				path: "custom/workflows/",
-				cacheEnabled: false,
 			});
 			expect(loader.getWorkflowPath()).toContain("custom/workflows");
 		});
@@ -369,87 +368,6 @@ describe("WorkflowLoader", () => {
 
 			await loader.refresh();
 
-			expect(loader.count).toBe(1);
-		});
-	});
-
-	describe("caching behavior", () => {
-		it("should cache workflows when cacheEnabled is true", async () => {
-			const { workflowsDir } = createWorkflowStructure(tempDir);
-			createWorkflowFile(workflowsDir, "workflow.yaml", [
-				{ name: "cached", description: "Cached workflow" },
-			]);
-
-			const loader = new WorkflowLoader(
-				{ source: tempDir, path: "workflows/", cacheEnabled: true },
-				parser,
-			);
-
-			// First load
-			await loader.load();
-			expect(loader.count).toBe(1);
-
-			// Second load should use cache (no file changes)
-			await loader.load();
-			expect(loader.count).toBe(1);
-		});
-
-		it("should detect file changes when cache is enabled", async () => {
-			const { workflowsDir } = createWorkflowStructure(tempDir);
-			const filePath = path.join(workflowsDir, "workflow.yaml");
-
-			const yaml1 = `workflows:
-  - name: version-one
-    description: Version 1
-    subroutines:
-      - name: step
-        prompt_file: prompts/step-one.md
-`;
-			fs.writeFileSync(filePath, yaml1);
-
-			const loader = new WorkflowLoader(
-				{
-					source: tempDir,
-					path: "workflows/workflow.yaml",
-					cacheEnabled: true,
-				},
-				parser,
-			);
-
-			await loader.load();
-			expect(loader.get("version-one")).toBeDefined();
-
-			// Small delay to ensure mtime changes
-			await new Promise((resolve) => setTimeout(resolve, 10));
-
-			// Modify the file
-			const yaml2 = `workflows:
-  - name: version-two
-    description: Version 2
-    subroutines:
-      - name: step
-        prompt_file: prompts/step-one.md
-`;
-			fs.writeFileSync(filePath, yaml2);
-
-			// Clear the loader state and reload
-			await loader.refresh();
-			expect(loader.get("version-one")).toBeUndefined();
-			expect(loader.get("version-two")).toBeDefined();
-		});
-
-		it("should not use cache when cacheEnabled is false", async () => {
-			const { workflowsDir } = createWorkflowStructure(tempDir);
-			createWorkflowFile(workflowsDir, "workflow.yaml", [
-				{ name: "no-cache", description: "No cache workflow" },
-			]);
-
-			const loader = new WorkflowLoader(
-				{ source: tempDir, path: "workflows/", cacheEnabled: false },
-				parser,
-			);
-
-			await loader.load();
 			expect(loader.count).toBe(1);
 		});
 	});
