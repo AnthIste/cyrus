@@ -209,6 +209,8 @@ export class WorkerService {
 			serverPort: parsePort(process.env.CYRUS_SERVER_PORT, DEFAULT_SERVER_PORT),
 			serverHost: isExternalHost ? "0.0.0.0" : "localhost",
 			ngrokAuthToken,
+			// External workflows repository configuration
+			workflowsRepository: edgeConfig.workflowsRepository,
 			features: {
 				enableContinuation: true,
 			},

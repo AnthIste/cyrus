@@ -8,6 +8,7 @@
 import type { CyrusAgentSession, ISimpleAgentRunner } from "cyrus-core";
 import { SimpleGeminiRunner } from "cyrus-gemini-runner";
 import { SimpleClaudeRunner } from "cyrus-simple-agent-runner";
+import type { WorkflowDefinition } from "../workflows/types.js";
 import { getProcedureForClassification, PROCEDURES } from "./registry.js";
 import type {
 	ProcedureAnalysisDecision,
@@ -15,6 +16,7 @@ import type {
 	ProcedureMetadata,
 	RequestClassification,
 	SubroutineDefinition,
+	WorkflowSelectionDecision,
 } from "./types.js";
 
 export type SimpleRunnerType = "claude" | "gemini";
@@ -24,6 +26,11 @@ export interface ProcedureAnalyzerConfig {
 	model?: string;
 	timeoutMs?: number;
 	runnerType?: SimpleRunnerType; // Default: "gemini"
+	/**
+	 * Additional procedures to register on initialization.
+	 * These take precedence over built-in procedures with the same name.
+	 */
+	additionalProcedures?: Map<string, ProcedureDefinition>;
 }
 
 export class ProcedureAnalyzer {
@@ -69,6 +76,13 @@ export class ProcedureAnalyzer {
 
 		// Load all predefined procedures from registry
 		this.loadPredefinedProcedures();
+
+		// Register any additional procedures (these override built-in procedures by name)
+		if (config.additionalProcedures) {
+			for (const [name, procedure] of config.additionalProcedures) {
+				this.procedures.set(name, procedure);
+			}
+		}
 	}
 
 	/**
@@ -178,6 +192,91 @@ IMPORTANT: Respond with ONLY the classification word, nothing else.`;
 				reasoning: `Fallback to full-development due to error: ${error}`,
 			};
 		}
+	}
+
+	/**
+	 * Match workflows by issue labels and return a routing decision.
+	 *
+	 * This is a pure function that takes workflows as a parameter.
+	 * When multiple workflows match, selects the one with highest priority.
+	 *
+	 * @param issueLabels - Labels from the Linear issue
+	 * @param workflows - Workflow definitions to match against
+	 * @returns WorkflowSelectionDecision if a label match is found, null otherwise
+	 */
+	matchWorkflowByLabels(
+		issueLabels: string[],
+		workflows: WorkflowDefinition[],
+	): WorkflowSelectionDecision | null {
+		if (issueLabels.length === 0 || workflows.length === 0) {
+			return null;
+		}
+
+		const normalizedIssueLabels = issueLabels.map((l) => l.toLowerCase());
+
+		// Find workflows with matching labels, sorted by priority (highest first)
+		const matchingWorkflows = workflows
+			.filter((w) => {
+				const triggerLabels = w.triggers?.labels;
+				if (!triggerLabels || triggerLabels.length === 0) {
+					return false;
+				}
+				return triggerLabels.some((triggerLabel) =>
+					normalizedIssueLabels.includes(triggerLabel.toLowerCase()),
+				);
+			})
+			.sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+
+		if (matchingWorkflows.length === 0) {
+			return null;
+		}
+
+		const selectedWorkflow = matchingWorkflows[0]!;
+		const procedure = this.procedures.get(selectedWorkflow.name);
+
+		if (!procedure) {
+			console.log(
+				`[ProcedureAnalyzer] Warning: Matched workflow "${selectedWorkflow.name}" not found in procedures`,
+			);
+			return null;
+		}
+
+		const matchedLabels = selectedWorkflow.triggers?.labels?.filter((l) =>
+			normalizedIssueLabels.includes(l.toLowerCase()),
+		);
+
+		// Infer classification from workflow
+		const classification =
+			selectedWorkflow.triggers?.classifications?.[0] ??
+			this.inferClassificationFromProcedure(selectedWorkflow.name);
+
+		return {
+			workflowName: selectedWorkflow.name,
+			procedure,
+			selectionMode: "direct",
+			classification,
+			reasoning: `Label-based match: [${matchedLabels?.join(", ")}] → "${selectedWorkflow.name}"`,
+		};
+	}
+
+	/**
+	 * Infer a classification from a procedure name for backward compatibility.
+	 */
+	private inferClassificationFromProcedure(
+		procedureName: string,
+	): RequestClassification {
+		const nameToClassification: Record<string, RequestClassification> = {
+			"full-development": "code",
+			"simple-question": "question",
+			"documentation-edit": "documentation",
+			"debugger-full": "debugger",
+			"orchestrator-full": "orchestrator",
+			"plan-mode": "planning",
+			"user-testing": "user-testing",
+			release: "release",
+		};
+
+		return nameToClassification[procedureName] ?? "code";
 	}
 
 	/**

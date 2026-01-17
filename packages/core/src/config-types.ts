@@ -106,6 +106,33 @@ export interface RepositoryConfig {
 }
 
 /**
+ * Configuration for workflow sources.
+ * Used by EdgeWorkerConfig.workflowsRepository to specify where to load external workflows from.
+ */
+export interface WorkflowSourceConfig {
+	/**
+	 * Source for workflows. Can be:
+	 * - Local filesystem path (e.g., "/path/to/workflows")
+	 * - Git HTTPS URL (e.g., "https://github.com/org/repo.git")
+	 * - Git SSH URL (e.g., "git@github.com:org/repo.git")
+	 */
+	source: string;
+
+	/**
+	 * Git branch to use. Only applies when source is a Git URL.
+	 * @default "main"
+	 */
+	branch?: string;
+
+	/**
+	 * Subdirectory within the repository containing workflow files.
+	 * This is where YAML workflow files and prompt files are located.
+	 * @default "workflows/"
+	 */
+	path?: string;
+}
+
+/**
  * Configuration for the EdgeWorker supporting multiple repositories
  */
 export interface EdgeWorkerConfig {
@@ -168,6 +195,14 @@ export interface EdgeWorkerConfig {
 	// Cyrus home directory
 	cyrusHome: string;
 
+	// External workflow loading configuration
+	/**
+	 * Configuration for loading external workflows from a local directory or Git repository.
+	 * When configured, external workflows will be merged with built-in workflows, with
+	 * external workflows taking precedence by name.
+	 */
+	workflowsRepository?: WorkflowSourceConfig;
+
 	// Agent configuration (for CLI mode)
 	agentHandle?: string; // The name/handle the agent responds to (e.g., "john", "cyrus")
 	agentUserId?: string; // The user ID of the agent (for CLI mode)
@@ -229,4 +264,24 @@ export interface EdgeConfig {
 	defaultModel?: string; // Default Claude model to use across all repositories
 	defaultFallbackModel?: string; // Default fallback model if primary model is unavailable
 	global_setup_script?: string; // Optional path to global setup script that runs for all repositories
+
+	/**
+	 * External workflows repository configuration.
+	 * Allows loading custom workflows from a local directory or Git repository.
+	 *
+	 * @example Local path
+	 * ```yaml
+	 * workflowsRepository:
+	 *   source: "~/.cyrus/custom-workflows"
+	 * ```
+	 *
+	 * @example Git repository
+	 * ```yaml
+	 * workflowsRepository:
+	 *   source: "git@github.com:myorg/cyrus-workflows.git"
+	 *   branch: main
+	 *   path: workflows/
+	 * ```
+	 */
+	workflowsRepository?: WorkflowSourceConfig;
 }
