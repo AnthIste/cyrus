@@ -5,7 +5,7 @@ This changelog documents internal development changes, refactors, tooling update
 ## [Unreleased]
 
 ### Added
-- YAML workflow schema and types for external workflow definitions
+- YAML workflow schema and types for external workflow definitions ([#13](https://github.com/AnthIste/cyrus/pull/13))
 - WorkflowParser for parsing and validating YAML workflow files
 - WorkflowLoader for loading workflows from local directories or Git repositories
 - ProcedureAnalyzer.matchWorkflowByLabels for label-based workflow routing
