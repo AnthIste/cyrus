@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Workflow management CLI commands** - Added `cyrus workflows` command with subcommands to manage and inspect workflows: `list` (view all built-in and external workflows), `refresh` (reload external workflows), `validate <path>` (validate YAML workflow files), and `show <name>` (display workflow details). ([RUB-74](https://linear.app/rbakker/issue/RUB-74), [#9](https://github.com/AnthIste/cyrus/pull/9))
 - **External workflows repository configuration** - Added support for configuring an external workflows repository in `config.json`. Users can now specify a local path or Git repository (HTTPS/SSH) to load custom workflows that override built-in procedures. ([RUB-70](https://linear.app/rbakker/issue/RUB-70), [#8](https://github.com/AnthIste/cyrus/pull/8))
 
 ### Fixed
