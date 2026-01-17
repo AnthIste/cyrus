@@ -18,9 +18,15 @@ export { AskUserQuestionHandler } from "./AskUserQuestionHandler.js";
 export { EdgeWorker } from "./EdgeWorker.js";
 export type { GitServiceLogger } from "./GitService.js";
 export { GitService } from "./GitService.js";
-export type { ProcedureDefinition } from "./procedures/index.js";
-// Export procedure registry for built-in workflows
-export { PROCEDURES } from "./procedures/index.js";
+export type {
+	ProcedureAnalysisDecision,
+	ProcedureDefinition,
+	RequestClassification,
+	SimpleRunnerType,
+	WorkflowSelectionDecision,
+} from "./procedures/index.js";
+// Export procedure registry and analyzer for built-in workflows
+export { PROCEDURES, ProcedureAnalyzer } from "./procedures/index.js";
 export { RepositoryRouter } from "./RepositoryRouter.js";
 export { SharedApplicationServer } from "./SharedApplicationServer.js";
 export type { EdgeWorkerEvents } from "./types.js";
