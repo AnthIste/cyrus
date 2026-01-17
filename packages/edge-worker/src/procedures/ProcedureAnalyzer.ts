@@ -245,10 +245,10 @@ IMPORTANT: Respond with ONLY the classification word, nothing else.`;
 			normalizedIssueLabels.includes(l.toLowerCase()),
 		);
 
-		// Infer classification from workflow
-		const classification =
-			selectedWorkflow.triggers?.classifications?.[0] ??
-			this.inferClassificationFromProcedure(selectedWorkflow.name);
+		// Use workflow's classification if specified, otherwise default to "code"
+		// (classification is only used for display/logging, not routing)
+		const classification: RequestClassification =
+			selectedWorkflow.triggers?.classifications?.[0] ?? "code";
 
 		return {
 			workflowName: selectedWorkflow.name,
@@ -257,26 +257,6 @@ IMPORTANT: Respond with ONLY the classification word, nothing else.`;
 			classification,
 			reasoning: `Label-based match: [${matchedLabels?.join(", ")}] → "${selectedWorkflow.name}"`,
 		};
-	}
-
-	/**
-	 * Infer a classification from a procedure name for backward compatibility.
-	 */
-	private inferClassificationFromProcedure(
-		procedureName: string,
-	): RequestClassification {
-		const nameToClassification: Record<string, RequestClassification> = {
-			"full-development": "code",
-			"simple-question": "question",
-			"documentation-edit": "documentation",
-			"debugger-full": "debugger",
-			"orchestrator-full": "orchestrator",
-			"plan-mode": "planning",
-			"user-testing": "user-testing",
-			release: "release",
-		};
-
-		return nameToClassification[procedureName] ?? "code";
 	}
 
 	/**
