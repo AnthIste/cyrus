@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **External workflows repository** - Load custom workflows from a local directory or Git repository. Configure `workflowsRepository` in your config to specify a source path or Git URL. External workflows override built-in workflows by name, enabling teams to customize procedures without modifying Cyrus core.
+- **Workflow management CLI** - Added `cyrus workflows` command with subcommands: `list` (view workflows), `show <name>` (display details), `validate <path>` (validate YAML files), `refresh` (reload from source), `resolve` (test routing), and `classifications` (list valid types).
+
+### Fixed
+- **Tilde expansion in workflows path** - Tilde (`~`) paths in `workflowsRepository.source` now correctly expand to the user's home directory.
+
 ## [0.2.15] - 2026-01-16
 
 ### Added
