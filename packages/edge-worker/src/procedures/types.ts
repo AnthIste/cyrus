@@ -128,6 +128,33 @@ export interface ProcedureAnalysisDecision {
 }
 
 /**
+ * Issue context for classification analysis
+ * Provides rich context about the Linear issue being classified
+ */
+export interface IssueContextForClassification {
+	/** Issue identifier (e.g., "RUB-77") */
+	identifier: string;
+
+	/** Issue title */
+	title: string;
+
+	/** Issue description (may be empty) */
+	description?: string;
+
+	/** Issue state (e.g., "In Progress", "Backlog") */
+	state?: string;
+
+	/** Issue priority (e.g., "High", "Medium", "Low") */
+	priority?: string;
+
+	/** Labels applied to the issue */
+	labels?: string[];
+
+	/** New comment triggering the classification (if any) */
+	newComment?: string;
+}
+
+/**
  * Selection mode for workflow routing
  */
 export type WorkflowSelectionMode =

@@ -11,6 +11,7 @@ import { SimpleClaudeRunner } from "cyrus-simple-agent-runner";
 import type { WorkflowDefinition } from "../workflows/types.js";
 import { getProcedureForClassification, PROCEDURES } from "./registry.js";
 import type {
+	IssueContextForClassification,
 	ProcedureAnalysisDecision,
 	ProcedureDefinition,
 	ProcedureMetadata,
@@ -149,16 +150,69 @@ IMPORTANT: Respond with ONLY the classification word, nothing else.`;
 	}
 
 	/**
+	 * Build the classification prompt from issue context
+	 */
+	private buildClassificationPrompt(
+		issueContext: IssueContextForClassification,
+	): string {
+		const parts: string[] = [];
+
+		parts.push("<linear_issue>");
+		parts.push(`  <identifier>${issueContext.identifier}</identifier>`);
+		parts.push(`  <title>${issueContext.title}</title>`);
+
+		if (issueContext.description) {
+			parts.push(`  <description>`);
+			parts.push(issueContext.description);
+			parts.push(`  </description>`);
+		}
+
+		if (issueContext.state) {
+			parts.push(`  <state>${issueContext.state}</state>`);
+		}
+
+		if (issueContext.priority) {
+			parts.push(`  <priority>${issueContext.priority}</priority>`);
+		}
+
+		if (issueContext.labels && issueContext.labels.length > 0) {
+			parts.push(`  <labels>${issueContext.labels.join(", ")}</labels>`);
+		}
+
+		parts.push("</linear_issue>");
+
+		if (issueContext.newComment) {
+			parts.push("");
+			parts.push("<new_comment>");
+			parts.push(issueContext.newComment);
+			parts.push("</new_comment>");
+		}
+
+		return parts.join("\n");
+	}
+
+	/**
 	 * Analyze a request and determine which procedure to use
+	 *
+	 * @param requestText - Plain text of the request (legacy parameter, used as fallback)
+	 * @param issueContext - Optional structured issue context for better classification
 	 */
 	async determineRoutine(
 		requestText: string,
+		issueContext?: IssueContextForClassification,
 	): Promise<ProcedureAnalysisDecision> {
 		try {
+			// Build the prompt - use structured context if available, otherwise fall back to plain text
+			let prompt: string;
+			if (issueContext) {
+				const contextXml = this.buildClassificationPrompt(issueContext);
+				prompt = `Classify this Linear issue request:\n\n${contextXml}`;
+			} else {
+				prompt = `Classify this Linear issue request:\n\n${requestText}`;
+			}
+
 			// Classify the request using analysis runner
-			const result = await this.analysisRunner.query(
-				`Classify this Linear issue request:\n\n${requestText}`,
-			);
+			const result = await this.analysisRunner.query(prompt);
 
 			const classification = result.response;
 

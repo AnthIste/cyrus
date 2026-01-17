@@ -413,5 +413,35 @@ describe("ProcedureAnalyzer - matchWorkflowByLabels", () => {
 			expect(result.procedure).toBeDefined();
 			expect(result.reasoning).toBeDefined();
 		});
+
+		it("should work with determineRoutine with issue context", async () => {
+			const result = await procedureAnalyzer.determineRoutine("", {
+				identifier: "RUB-77",
+				title: "Procedure analyzer does not provide issue context",
+				description:
+					"When routing a request through our custom workflows, the AI classifier does not have enough context.",
+				state: "In Progress",
+				priority: "Normal",
+				labels: ["Feature"],
+			});
+
+			expect(result.classification).toBeDefined();
+			expect(result.procedure).toBeDefined();
+			expect(result.reasoning).toBeDefined();
+		});
+
+		it("should work with determineRoutine with issue context and new comment", async () => {
+			const result = await procedureAnalyzer.determineRoutine("", {
+				identifier: "RUB-77",
+				title: "Fix the login bug",
+				description: "Users cannot login with their credentials",
+				labels: ["Bug"],
+				newComment: "Please also check the session timeout handling",
+			});
+
+			expect(result.classification).toBeDefined();
+			expect(result.procedure).toBeDefined();
+			expect(result.reasoning).toBeDefined();
+		});
 	});
 });
