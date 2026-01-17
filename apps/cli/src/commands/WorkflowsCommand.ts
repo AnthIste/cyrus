@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { resolvePath } from "cyrus-core";
 import {
 	PROCEDURES,
 	type WorkflowDefinition,
@@ -107,6 +108,7 @@ export class WorkflowsCommand extends BaseCommand {
 			try {
 				const loader = new WorkflowLoader({
 					...config.workflowsRepository,
+					source: resolvePath(config.workflowsRepository.source),
 					cyrusHome: this.app.cyrusHome,
 				});
 
@@ -237,6 +239,7 @@ export class WorkflowsCommand extends BaseCommand {
 		try {
 			const loader = new WorkflowLoader({
 				...config.workflowsRepository,
+				source: resolvePath(config.workflowsRepository.source),
 				cyrusHome: this.app.cyrusHome,
 			});
 
@@ -472,6 +475,7 @@ export class WorkflowsCommand extends BaseCommand {
 			try {
 				const loader = new WorkflowLoader({
 					...config.workflowsRepository,
+					source: resolvePath(config.workflowsRepository.source),
 					cyrusHome: this.app.cyrusHome,
 				});
 

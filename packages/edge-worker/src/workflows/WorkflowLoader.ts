@@ -8,7 +8,6 @@
 
 import { execSync } from "node:child_process";
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 
 import type { WorkflowSourceConfig } from "cyrus-core";
@@ -80,19 +79,6 @@ export class WorkflowLoader {
 	}
 
 	/**
-	 * Expand tilde (~) in a path to the user's home directory
-	 */
-	private expandTilde(filepath: string): string {
-		if (filepath.startsWith("~/")) {
-			return path.join(os.homedir(), filepath.slice(2));
-		}
-		if (filepath === "~") {
-			return os.homedir();
-		}
-		return filepath;
-	}
-
-	/**
 	 * Check if a source string is a Git URL
 	 */
 	private isGitUrl(source: string): boolean {
@@ -154,9 +140,7 @@ export class WorkflowLoader {
 			const workDir = this.workingDirectory ?? this.getGitWorkingDirectory();
 			return path.join(workDir, this.config.path);
 		}
-		// For local paths, expand tilde to user's home directory
-		const expandedSource = this.expandTilde(this.config.source);
-		return path.join(expandedSource, this.config.path);
+		return path.join(this.config.source, this.config.path);
 	}
 
 	/**

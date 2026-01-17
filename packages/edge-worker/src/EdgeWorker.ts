@@ -395,9 +395,9 @@ export class EdgeWorker extends EventEmitter {
 		}
 
 		try {
-			// Initialize workflow loader
+			// Initialize workflow loader with resolved source path
 			this.workflowLoader = new WorkflowLoader({
-				source: workflowsConfig.source,
+				source: resolvePath(workflowsConfig.source),
 				branch: workflowsConfig.branch,
 				path: workflowsConfig.path,
 				cyrusHome: this.cyrusHome,
