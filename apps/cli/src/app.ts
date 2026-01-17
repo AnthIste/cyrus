@@ -141,6 +141,7 @@ workflowsCmd
 			packageJson.version,
 		);
 		await new WorkflowsCommand(app).execute(["list"]);
+		app.cleanup();
 	});
 
 workflowsCmd
@@ -154,6 +155,7 @@ workflowsCmd
 			packageJson.version,
 		);
 		await new WorkflowsCommand(app).execute(["refresh"]);
+		app.cleanup();
 	});
 
 workflowsCmd
@@ -167,6 +169,7 @@ workflowsCmd
 			packageJson.version,
 		);
 		await new WorkflowsCommand(app).execute(["validate", path]);
+		app.cleanup();
 	});
 
 workflowsCmd
@@ -180,6 +183,7 @@ workflowsCmd
 			packageJson.version,
 		);
 		await new WorkflowsCommand(app).execute(["show", name]);
+		app.cleanup();
 	});
 
 workflowsCmd
@@ -191,7 +195,7 @@ workflowsCmd
 		(value: string, previous: string[]) => previous.concat([value]),
 		[] as string[],
 	)
-	.option("-r, --runner <type>", "AI runner: claude or gemini", "gemini")
+	.option("-r, --runner <type>", "AI runner: claude or gemini", "claude")
 	.action(
 		async (body: string, options: { label: string[]; runner: string }) => {
 			const opts = program.opts();
@@ -205,6 +209,7 @@ workflowsCmd
 				options.label,
 				options.runner as "claude" | "gemini",
 			);
+			app.cleanup();
 		},
 	);
 
@@ -219,6 +224,7 @@ workflowsCmd
 			packageJson.version,
 		);
 		await new WorkflowsCommand(app).execute(["classifications"]);
+		app.cleanup();
 	});
 
 // Parse and execute
