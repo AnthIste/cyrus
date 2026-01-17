@@ -2,7 +2,10 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { resolvePath } from "cyrus-core";
 import {
+	CLASSIFICATION_TO_PROCEDURE,
 	PROCEDURES,
+	ProcedureAnalyzer,
+	type SimpleRunnerType,
 	type WorkflowDefinition,
 	WorkflowLoader,
 	WorkflowParser,
@@ -33,6 +36,8 @@ interface WorkflowInfo {
  * - refresh: Manually refresh external workflows
  * - validate <path>: Validate a workflow YAML file
  * - show <name>: Show details of a specific workflow
+ * - resolve <body>: Resolve workflow for given issue body and labels
+ * - classifications: List all valid request classifications
  */
 export class WorkflowsCommand extends BaseCommand {
 	private parser: WorkflowParser;
@@ -57,6 +62,9 @@ export class WorkflowsCommand extends BaseCommand {
 				break;
 			case "show":
 				await this.show(args[1]);
+				break;
+			case "classifications":
+				this.listClassifications();
 				break;
 			case undefined:
 			case "":
@@ -83,6 +91,10 @@ export class WorkflowsCommand extends BaseCommand {
 		);
 		this.logger.raw("  validate <path>   Validate a workflow YAML file");
 		this.logger.raw("  show <name>       Show details of a specific workflow");
+		this.logger.raw("  resolve <body>    Resolve workflow for issue body");
+		this.logger.raw("  classifications   List valid request classifications");
+		this.logger.raw("");
+		this.logger.raw("Use 'cyrus workflows <subcommand> --help' for more info.");
 		this.logger.raw("");
 	}
 
@@ -550,5 +562,142 @@ export class WorkflowsCommand extends BaseCommand {
 		});
 
 		this.logger.raw("");
+	}
+
+	/**
+	 * Resolve workflow for given issue body and labels
+	 * Called directly from Commander with parsed options
+	 *
+	 * Resolution order:
+	 * 1. Try label-based matching against workflow frontmatter
+	 * 2. Fall back to AI classification if no label match
+	 */
+	async executeResolve(
+		body: string,
+		labels: string[],
+		runner: SimpleRunnerType,
+	): Promise<void> {
+		this.logger.raw("");
+		this.logger.raw("Workflow Resolution");
+		this.logger.raw("===================");
+		this.logger.raw("");
+		this.logger.raw(`Body: "${body}"`);
+		if (labels.length > 0) {
+			this.logger.raw(`Labels: [${labels.join(", ")}]`);
+		}
+		this.logger.raw(`Runner: ${runner}`);
+		this.logger.raw("");
+
+		try {
+			// Load external workflows if configured
+			const config = this.app.config.load();
+			const workflowsConfig = config.workflowsRepository;
+			const workflows: WorkflowDefinition[] = [];
+
+			// Load external workflows
+			let loader: WorkflowLoader | null = null;
+			if (workflowsConfig) {
+				this.logger.raw(
+					`Loading external workflows from: ${workflowsConfig.source}`,
+				);
+				loader = new WorkflowLoader({
+					source: workflowsConfig.source,
+					branch: workflowsConfig.branch,
+					path: workflowsConfig.path,
+					cyrusHome: this.app.cyrusHome,
+				});
+
+				await loader.load();
+				workflows.push(...loader.getAllWorkflows());
+				this.logger.raw(`Loaded ${workflows.length} external workflow(s)`);
+			}
+
+			this.logger.raw("");
+
+			// Create a ProcedureAnalyzer instance with external procedures
+			const externalProcedures = new Map<
+				string,
+				(typeof PROCEDURES)[keyof typeof PROCEDURES]
+			>();
+			if (loader) {
+				for (const procedure of loader.getAll()) {
+					externalProcedures.set(procedure.name, procedure);
+				}
+			}
+
+			const analyzer = new ProcedureAnalyzer({
+				cyrusHome: this.app.cyrusHome,
+				additionalProcedures: externalProcedures,
+				runnerType: runner,
+			});
+
+			// Step 1: Try label-based matching if labels provided
+			if (labels.length > 0) {
+				this.logger.raw("Step 1: Trying label-based matching...");
+				const labelDecision = analyzer.matchWorkflowByLabels(labels, workflows);
+
+				if (labelDecision) {
+					this.logger.raw("");
+					this.logSuccess("Label Match Found!");
+					this.logger.raw("------------------");
+					this.logger.raw(`Workflow: ${labelDecision.workflowName}`);
+					this.logger.raw(`Selection Mode: ${labelDecision.selectionMode}`);
+					this.logger.raw(`Classification: ${labelDecision.classification}`);
+					this.logger.raw(`Reasoning: ${labelDecision.reasoning}`);
+					await this.show(labelDecision.procedure.name);
+					return;
+				}
+
+				this.logger.raw("  No label match found, falling back to AI...");
+				this.logger.raw("");
+			}
+
+			// Step 2: AI classification
+			this.logger.raw(
+				labels.length > 0
+					? "Step 2: AI Classification..."
+					: "AI Classification...",
+			);
+
+			const decision = await analyzer.determineRoutine(body);
+
+			this.logger.raw("");
+			this.logSuccess("AI Classification Result");
+			this.logger.raw("------------------------");
+			this.logger.raw(`Classification: ${decision.classification}`);
+			this.logger.raw(`Workflow: ${decision.procedure.name}`);
+			this.logger.raw(`Reasoning: ${decision.reasoning}`);
+			await this.show(decision.procedure.name);
+		} catch (error) {
+			this.logError(`Error during workflow resolution: ${error}`);
+			process.exit(1);
+		}
+	}
+
+	/**
+	 * List all valid request classifications from the canonical registry
+	 */
+	private listClassifications(): void {
+		this.logger.raw("");
+		this.logger.raw("Request Classifications");
+		this.logger.raw("=======================");
+		this.logger.raw("");
+		this.logger.raw(
+			"These are the possible classification values returned by AI workflow resolution:",
+		);
+		this.logger.raw("");
+
+		// Use canonical CLASSIFICATION_TO_PROCEDURE mapping
+		for (const [classification, procedureName] of Object.entries(
+			CLASSIFICATION_TO_PROCEDURE,
+		)) {
+			const procedure = PROCEDURES[procedureName];
+			this.logger.raw(`${classification}`);
+			this.logger.raw(`  Procedure: ${procedureName}`);
+			if (procedure) {
+				this.logger.raw(`  Description: ${procedure.description}`);
+			}
+			this.logger.raw("");
+		}
 	}
 }
