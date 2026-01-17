@@ -1,0 +1,175 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"$id": "https://cyrus.ai/schemas/workflow-schema.json",
+	"title": "Cyrus Workflow Definition",
+	"description": "Schema for defining Cyrus AI agent workflows in YAML format",
+	"definitions": {
+		"RequestClassification": {
+			"type": "string",
+			"enum": [
+				"question",
+				"documentation",
+				"transient",
+				"planning",
+				"code",
+				"debugger",
+				"orchestrator",
+				"user-testing",
+				"release"
+			],
+			"description": "Classification type for routing requests to workflows"
+		},
+		"SubroutineReference": {
+			"type": "object",
+			"description": "Reference to a subroutine within a workflow",
+			"required": ["name", "prompt_file"],
+			"additionalProperties": false,
+			"properties": {
+				"name": {
+					"type": "string",
+					"description": "Unique identifier for the subroutine",
+					"pattern": "^[a-z][a-z0-9-]*$"
+				},
+				"prompt_file": {
+					"type": "string",
+					"description": "Path to the prompt file (relative to the workflows directory)",
+					"pattern": "^[a-zA-Z0-9_./-]+\\.md$"
+				},
+				"description": {
+					"type": "string",
+					"description": "Human-readable description of what this subroutine does"
+				},
+				"single_turn": {
+					"type": "boolean",
+					"default": false,
+					"description": "Whether this subroutine should run in single-turn mode (maxTurns: 1)"
+				},
+				"validation_loop": {
+					"type": "boolean",
+					"default": false,
+					"description": "Whether this subroutine uses the validation loop with retry logic"
+				},
+				"max_iterations": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 10,
+					"default": 3,
+					"description": "Maximum iterations for the validation loop"
+				},
+				"disallow_tools": {
+					"type": "boolean",
+					"default": false,
+					"description": "Whether to disallow ALL tool usage during this subroutine"
+				},
+				"disallowed_tools": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"description": "Specific tools that should be explicitly disallowed"
+				},
+				"requires_approval": {
+					"type": "boolean",
+					"default": false,
+					"description": "Whether this subroutine requires user approval before advancing"
+				},
+				"suppress_thought_posting": {
+					"type": "boolean",
+					"default": false,
+					"description": "Whether to suppress posting thoughts/actions to Linear"
+				},
+				"skip_linear_post": {
+					"type": "boolean",
+					"default": false,
+					"description": "Whether to skip posting any output to Linear"
+				}
+			}
+		},
+		"WorkflowTriggers": {
+			"type": "object",
+			"description": "Trigger configuration for automatic workflow selection",
+			"additionalProperties": false,
+			"properties": {
+				"classifications": {
+					"type": "array",
+					"items": {
+						"$ref": "#/definitions/RequestClassification"
+					},
+					"description": "Request classifications that trigger this workflow"
+				},
+				"labels": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"description": "Linear issue labels that trigger this workflow"
+				},
+				"keywords": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"description": "Keywords in the issue that suggest this workflow"
+				},
+				"examples": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"description": "Few-shot examples for AI router guidance"
+				}
+			}
+		},
+		"WorkflowDefinition": {
+			"type": "object",
+			"description": "Complete workflow definition",
+			"required": ["name", "description", "subroutines"],
+			"additionalProperties": false,
+			"properties": {
+				"name": {
+					"type": "string",
+					"description": "Unique identifier for the workflow",
+					"pattern": "^[a-z][a-z0-9-]*$"
+				},
+				"description": {
+					"type": "string",
+					"description": "Human-readable description of what this workflow does"
+				},
+				"triggers": {
+					"$ref": "#/definitions/WorkflowTriggers"
+				},
+				"priority": {
+					"type": "integer",
+					"default": 0,
+					"description": "Priority for workflow selection (higher = preferred)"
+				},
+				"subroutines": {
+					"type": "array",
+					"items": {
+						"$ref": "#/definitions/SubroutineReference"
+					},
+					"minItems": 1,
+					"description": "Ordered list of subroutines to execute"
+				}
+			}
+		}
+	},
+	"type": "object",
+	"required": ["workflows"],
+	"additionalProperties": false,
+	"properties": {
+		"version": {
+			"type": "string",
+			"description": "Version of the workflow schema",
+			"pattern": "^[0-9]+\\.[0-9]+$"
+		},
+		"workflows": {
+			"type": "array",
+			"items": {
+				"$ref": "#/definitions/WorkflowDefinition"
+			},
+			"minItems": 1,
+			"description": "List of workflow definitions"
+		}
+	}
+}
