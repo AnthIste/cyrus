@@ -26,7 +26,11 @@ export type {
 	WorkflowSelectionDecision,
 } from "./procedures/index.js";
 // Export procedure registry and analyzer for built-in workflows
-export { PROCEDURES, ProcedureAnalyzer } from "./procedures/index.js";
+export {
+	CLASSIFICATION_TO_PROCEDURE,
+	PROCEDURES,
+	ProcedureAnalyzer,
+} from "./procedures/index.js";
 export { RepositoryRouter } from "./RepositoryRouter.js";
 export { SharedApplicationServer } from "./SharedApplicationServer.js";
 export type { EdgeWorkerEvents } from "./types.js";
