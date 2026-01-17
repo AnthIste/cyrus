@@ -5,7 +5,7 @@ This changelog documents internal development changes, refactors, tooling update
 ## [Unreleased]
 
 ### Added
-- Added `cyrus test` CLI command with subcommands for testing workflow resolution features: `resolve-workflow` (AI-based classification), `resolve-labels` (label-based matching), and `list-classifications` (list valid classifications) ([RUB-75](https://linear.app/rbakker/issue/RUB-75), [#11](https://github.com/AnthIste/cyrus/pull/11))
+- Added `cyrus workflows resolve` and `cyrus workflows classifications` subcommands for testing workflow resolution: resolve supports `--label` flags for label-based matching with AI fallback, and classifications lists all valid request types ([RUB-75](https://linear.app/rbakker/issue/RUB-75), [#11](https://github.com/AnthIste/cyrus/pull/11))
 - Added TypeScript types and JSON Schema for YAML workflow definitions, enabling external workflow configuration ([RUB-67](https://linear.app/rbakker/issue/RUB-67), [#3](https://github.com/AnthIste/cyrus/pull/3))
 - Added WorkflowParser class for parsing and validating YAML workflow files and converting them to internal ProcedureDefinition format ([RUB-68](https://linear.app/rbakker/issue/RUB-68), [#4](https://github.com/AnthIste/cyrus/pull/4))
 - Added WorkflowLoader class for discovering and loading workflows from local directories or Git repositories ([RUB-69](https://linear.app/rbakker/issue/RUB-69), [#5](https://github.com/AnthIste/cyrus/pull/5))

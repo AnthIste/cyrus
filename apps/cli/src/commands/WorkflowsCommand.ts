@@ -2,6 +2,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import {
 	PROCEDURES,
+	ProcedureAnalyzer,
+	type SimpleRunnerType,
 	type WorkflowDefinition,
 	WorkflowLoader,
 	WorkflowParser,
@@ -32,6 +34,8 @@ interface WorkflowInfo {
  * - refresh: Manually refresh external workflows
  * - validate <path>: Validate a workflow YAML file
  * - show <name>: Show details of a specific workflow
+ * - resolve <body>: Resolve workflow for given issue body and labels
+ * - classifications: List all valid request classifications
  */
 export class WorkflowsCommand extends BaseCommand {
 	private parser: WorkflowParser;
@@ -56,6 +60,12 @@ export class WorkflowsCommand extends BaseCommand {
 				break;
 			case "show":
 				await this.show(args[1]);
+				break;
+			case "resolve":
+				await this.resolve(args.slice(1));
+				break;
+			case "classifications":
+				this.listClassifications();
 				break;
 			case undefined:
 			case "":
@@ -82,6 +92,23 @@ export class WorkflowsCommand extends BaseCommand {
 		);
 		this.logger.raw("  validate <path>   Validate a workflow YAML file");
 		this.logger.raw("  show <name>       Show details of a specific workflow");
+		this.logger.raw("  resolve <body>    Resolve workflow for issue body");
+		this.logger.raw("  classifications   List valid request classifications");
+		this.logger.raw("");
+		this.logger.raw("Resolve options:");
+		this.logger.raw("  --label <name>    Add a label (can be repeated)");
+		this.logger.raw(
+			"  --runner <type>   AI runner: claude or gemini (default: gemini)",
+		);
+		this.logger.raw("");
+		this.logger.raw("Examples:");
+		this.logger.raw(
+			'  cyrus workflows resolve "Fix the login bug" --label bug --label auth',
+		);
+		this.logger.raw('  cyrus workflows resolve "How does the API work?"');
+		this.logger.raw(
+			'  cyrus workflows resolve "Add new feature" --runner claude',
+		);
 		this.logger.raw("");
 	}
 
@@ -546,5 +573,313 @@ export class WorkflowsCommand extends BaseCommand {
 		});
 
 		this.logger.raw("");
+	}
+
+	/**
+	 * Parse --label and --runner options from args
+	 */
+	private parseResolveOptions(args: string[]): {
+		labels: string[];
+		runner: SimpleRunnerType;
+		body: string;
+	} {
+		const labels: string[] = [];
+		let runner: SimpleRunnerType = "gemini";
+		const bodyParts: string[] = [];
+
+		for (let i = 0; i < args.length; i++) {
+			const arg = args[i];
+			if (arg === "--label" && i + 1 < args.length) {
+				labels.push(args[i + 1]!);
+				i++; // Skip the next arg
+			} else if (arg === "--runner" && i + 1 < args.length) {
+				const value = args[i + 1];
+				if (value === "claude" || value === "gemini") {
+					runner = value;
+				} else {
+					this.logError(
+						`Invalid runner: ${value}. Must be 'claude' or 'gemini'`,
+					);
+					process.exit(1);
+				}
+				i++; // Skip the next arg
+			} else {
+				bodyParts.push(arg!);
+			}
+		}
+
+		return { labels, runner, body: bodyParts.join(" ") };
+	}
+
+	/**
+	 * Resolve workflow for given issue body and labels
+	 *
+	 * Resolution order:
+	 * 1. Try label-based matching against workflow frontmatter
+	 * 2. Fall back to AI classification if no label match
+	 */
+	private async resolve(args: string[]): Promise<void> {
+		const { labels, runner, body } = this.parseResolveOptions(args);
+
+		if (!body || body.trim() === "") {
+			this.logError("Error: Issue body is required");
+			this.logger.raw("");
+			this.logger.raw(
+				"Usage: cyrus workflows resolve <body> [--label <name>]... [--runner claude|gemini]",
+			);
+			this.logger.raw("");
+			this.logger.raw("Examples:");
+			this.logger.raw(
+				'  cyrus workflows resolve "Fix the login bug" --label bug --label auth',
+			);
+			this.logger.raw('  cyrus workflows resolve "How does the API work?"');
+			this.logger.raw(
+				'  cyrus workflows resolve "Add new feature" --runner claude',
+			);
+			process.exit(1);
+		}
+
+		this.logger.raw("");
+		this.logger.raw("Workflow Resolution");
+		this.logger.raw("===================");
+		this.logger.raw("");
+		this.logger.raw(`Body: "${body}"`);
+		if (labels.length > 0) {
+			this.logger.raw(`Labels: [${labels.join(", ")}]`);
+		}
+		this.logger.raw(`Runner: ${runner}`);
+		this.logger.raw("");
+
+		try {
+			// Load external workflows if configured
+			const config = this.app.config.load();
+			const workflowsConfig = config.workflowsRepository;
+			const workflows: WorkflowDefinition[] = [];
+
+			// Load external workflows
+			let loader: WorkflowLoader | null = null;
+			if (workflowsConfig) {
+				this.logger.raw(
+					`Loading external workflows from: ${workflowsConfig.source}`,
+				);
+				loader = new WorkflowLoader({
+					source: workflowsConfig.source,
+					branch: workflowsConfig.branch,
+					path: workflowsConfig.path,
+					cyrusHome: this.app.cyrusHome,
+				});
+
+				await loader.load();
+				workflows.push(...loader.getAllWorkflows());
+				this.logger.raw(`Loaded ${workflows.length} external workflow(s)`);
+			}
+
+			this.logger.raw("");
+
+			// Create a ProcedureAnalyzer instance with external procedures
+			const externalProcedures = new Map<
+				string,
+				(typeof PROCEDURES)[keyof typeof PROCEDURES]
+			>();
+			if (loader) {
+				for (const procedure of loader.getAll()) {
+					externalProcedures.set(procedure.name, procedure);
+				}
+			}
+
+			const analyzer = new ProcedureAnalyzer({
+				cyrusHome: this.app.cyrusHome,
+				additionalProcedures: externalProcedures,
+				runnerType: runner,
+			});
+
+			// Step 1: Try label-based matching if labels provided
+			if (labels.length > 0) {
+				this.logger.raw("Step 1: Trying label-based matching...");
+				const labelDecision = analyzer.matchWorkflowByLabels(labels, workflows);
+
+				if (labelDecision) {
+					this.logger.raw("");
+					this.logSuccess("Label Match Found!");
+					this.logger.raw("------------------");
+					this.logger.raw(`Workflow: ${labelDecision.workflowName}`);
+					this.logger.raw(`Selection Mode: ${labelDecision.selectionMode}`);
+					this.logger.raw(`Classification: ${labelDecision.classification}`);
+					this.logger.raw(`Reasoning: ${labelDecision.reasoning}`);
+					this.displayProcedureDetails(labelDecision.procedure);
+					return;
+				}
+
+				this.logger.raw("  No label match found, falling back to AI...");
+				this.logger.raw("");
+			}
+
+			// Step 2: AI classification
+			this.logger.raw(
+				labels.length > 0
+					? "Step 2: AI Classification..."
+					: "AI Classification...",
+			);
+
+			const decision = await analyzer.determineRoutine(body);
+
+			this.logger.raw("");
+			this.logSuccess("AI Classification Result");
+			this.logger.raw("------------------------");
+			this.logger.raw(`Classification: ${decision.classification}`);
+			this.logger.raw(`Workflow: ${decision.procedure.name}`);
+			this.logger.raw(`Reasoning: ${decision.reasoning}`);
+			this.displayProcedureDetails(decision.procedure);
+		} catch (error) {
+			this.logError(`Error during workflow resolution: ${error}`);
+			process.exit(1);
+		}
+	}
+
+	/**
+	 * Display procedure details (subroutines)
+	 */
+	private displayProcedureDetails(
+		procedure: (typeof PROCEDURES)[keyof typeof PROCEDURES],
+	): void {
+		this.logger.raw("");
+		this.logger.raw(`Description: ${procedure.description}`);
+		this.logger.raw("");
+		this.logger.raw("Subroutines:");
+		for (let i = 0; i < procedure.subroutines.length; i++) {
+			const sub = procedure.subroutines[i]!;
+			const flags: string[] = [];
+			if (sub.singleTurn) flags.push("single_turn");
+			if (sub.usesValidationLoop) flags.push("validation_loop");
+			if (sub.requiresApproval) flags.push("requires_approval");
+			if (sub.disallowAllTools) flags.push("disallow_tools");
+			if (sub.suppressThoughtPosting) flags.push("suppress_thought_posting");
+
+			const flagStr = flags.length > 0 ? ` (${flags.join(", ")})` : "";
+			this.logger.raw(`  ${i + 1}. ${sub.name}${flagStr}`);
+		}
+		this.logger.raw("");
+	}
+
+	/**
+	 * List all valid request classifications
+	 */
+	private listClassifications(): void {
+		this.logger.raw("");
+		this.logger.raw("Request Classifications");
+		this.logger.raw("=======================");
+		this.logger.raw("");
+		this.logger.raw(
+			"These are the possible classification values returned by AI workflow resolution:",
+		);
+		this.logger.raw("");
+
+		const classifications = [
+			{
+				name: "question",
+				procedure: "simple-question",
+				description: "User is asking a question or seeking information",
+				examples: [
+					"How does X work?",
+					"What is the purpose of Y?",
+					"Explain the architecture",
+				],
+			},
+			{
+				name: "documentation",
+				procedure: "documentation-edit",
+				description: "Documentation, markdown, or comments (no code changes)",
+				examples: [
+					"Update the README",
+					"Add docstrings to functions",
+					"Fix typos in docs",
+				],
+			},
+			{
+				name: "transient",
+				procedure: "simple-question",
+				description: "MCP tools, temporary files, or no codebase interaction",
+				examples: [
+					"Search the web for X",
+					"Generate a diagram",
+					"Use Linear MCP",
+				],
+			},
+			{
+				name: "planning",
+				procedure: "plan-mode",
+				description:
+					"Vague requirements, needs clarification, or asks for implementation plan",
+				examples: [
+					"Can you help with authentication?",
+					"I need to improve performance",
+					"Add a new feature",
+				],
+			},
+			{
+				name: "code",
+				procedure: "full-development",
+				description:
+					"Code changes with clear requirements (DEFAULT for most work)",
+				examples: [
+					"Fix bug in X",
+					"Add feature Y",
+					"Refactor module Z",
+					"Add unit tests",
+				],
+			},
+			{
+				name: "debugger",
+				procedure: "debugger-full",
+				description:
+					"EXPLICIT request for debugging workflow with reproduction and approval",
+				examples: [
+					"Debug this with approval workflow",
+					"Reproduce the bug first",
+					"Show root cause before fixing",
+				],
+			},
+			{
+				name: "orchestrator",
+				procedure: "orchestrator-full",
+				description: "EXPLICIT request for decomposition into sub-issues",
+				examples: [
+					"Break this into sub-issues",
+					"Orchestrate this work",
+					"Delegate to specialized agents",
+				],
+			},
+			{
+				name: "user-testing",
+				procedure: "user-testing",
+				description: "EXPLICIT request for manual/user testing session",
+				examples: [
+					"Test the login flow manually",
+					"Run user testing on checkout",
+					"Help me test this",
+				],
+			},
+			{
+				name: "release",
+				procedure: "release",
+				description: "EXPLICIT request for release/publish workflow",
+				examples: [
+					"Release the new version",
+					"Publish to npm",
+					"Create a new release",
+				],
+			},
+		];
+
+		for (const c of classifications) {
+			this.logger.raw(`${c.name}`);
+			this.logger.raw(`  Procedure: ${c.procedure}`);
+			this.logger.raw(`  Description: ${c.description}`);
+			this.logger.raw("  Examples:");
+			for (const ex of c.examples) {
+				this.logger.raw(`    - "${ex}"`);
+			}
+			this.logger.raw("");
+		}
 	}
 }

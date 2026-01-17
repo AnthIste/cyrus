@@ -12,7 +12,6 @@ import { RefreshTokenCommand } from "./commands/RefreshTokenCommand.js";
 import { SelfAddRepoCommand } from "./commands/SelfAddRepoCommand.js";
 import { SelfAuthCommand } from "./commands/SelfAuthCommand.js";
 import { StartCommand } from "./commands/StartCommand.js";
-import { TestCommand } from "./commands/TestCommand.js";
 import { WorkflowsCommand } from "./commands/WorkflowsCommand.js";
 
 // Get the directory of the current module for reading package.json
@@ -128,29 +127,11 @@ program
 
 // Workflows command - Manage and inspect workflows
 program
-	.command("workflows [subcommand] [arg]")
+	.command("workflows [subcommand] [args...]")
 	.description(
-		"Manage workflows. Subcommands: list, refresh, validate <path>, show <name>",
+		"Manage workflows. Subcommands: list, refresh, validate <path>, show <name>, resolve <body>, classifications",
 	)
-	.action(async (subcommand?: string, arg?: string) => {
-		const opts = program.opts();
-		const app = new Application(
-			opts.cyrusHome,
-			opts.envFile,
-			packageJson.version,
-		);
-		await new WorkflowsCommand(app).execute(
-			[subcommand, arg].filter(Boolean) as string[],
-		);
-	});
-
-// Test command - Test resolution features
-program
-	.command("test [subcommand] [args...]")
-	.description(
-		"Test resolution features. Subcommands: resolve-workflow <text>, resolve-labels <labels...>, list-classifications",
-	)
-	.allowUnknownOption() // Allow --runner and other options to pass through
+	.allowUnknownOption() // Allow --label and --runner options to pass through
 	.action(async (subcommand?: string, args?: string[]) => {
 		const opts = program.opts();
 		const app = new Application(
@@ -158,7 +139,7 @@ program
 			opts.envFile,
 			packageJson.version,
 		);
-		await new TestCommand(app).execute(
+		await new WorkflowsCommand(app).execute(
 			[subcommand, ...(args || [])].filter(Boolean) as string[],
 		);
 	});
