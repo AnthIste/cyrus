@@ -65,11 +65,22 @@ describe("CacheClearCommand", () => {
 		command = new CacheClearCommand(mockApp as any);
 	});
 
+	describe("Pattern Required", () => {
+		it("should exit with error when no pattern is provided", async () => {
+			await expect(command.execute([])).rejects.toThrow("process.exit called");
+			expect(mockExit).toHaveBeenCalledWith(1);
+			expect(mockApp.logger.error).toHaveBeenCalledWith("Pattern is required.");
+			expect(mockApp.logger.info).toHaveBeenCalledWith(
+				'Use "cyrus cache list" to see cached entries.',
+			);
+		});
+	});
+
 	describe("No State File", () => {
 		it("should report nothing to clear when state file does not exist", async () => {
 			mocks.mockExistsSync.mockReturnValue(false);
 
-			await command.execute([]);
+			await command.execute(["*"]);
 
 			expect(mockApp.logger.info).toHaveBeenCalledWith(
 				"No cache file found. Nothing to clear.",
@@ -82,61 +93,10 @@ describe("CacheClearCommand", () => {
 			mocks.mockExistsSync.mockReturnValue(true);
 			mocks.mockReadFile.mockResolvedValue(createStateFile({}));
 
-			await command.execute([]);
+			await command.execute(["*"]);
 
 			expect(mockApp.logger.info).toHaveBeenCalledWith(
 				"Cache is empty. Nothing to clear.",
-			);
-		});
-	});
-
-	describe("List Cache Entries", () => {
-		it("should list cache entries when no pattern is provided", async () => {
-			mocks.mockExistsSync.mockReturnValue(true);
-			mocks.mockReadFile.mockResolvedValue(
-				createStateFile(
-					{
-						"issue-uuid-1": "repo-uuid-1",
-						"issue-uuid-2": "repo-uuid-2",
-					},
-					{
-						"repo-uuid-1": {
-							"session-1": {
-								issueId: "issue-uuid-1",
-								issue: { identifier: "RUB-101" },
-							},
-						},
-						"repo-uuid-2": {
-							"session-2": {
-								issueId: "issue-uuid-2",
-								issue: { identifier: "RUB-102" },
-							},
-						},
-					},
-				),
-			);
-
-			await command.execute([]);
-
-			expect(mockApp.logger.info).toHaveBeenCalledWith(
-				"Found 2 cached repository selections:\n",
-			);
-			expect(mockApp.logger.info).toHaveBeenCalledWith("  RUB-101");
-			expect(mockApp.logger.info).toHaveBeenCalledWith("  RUB-102");
-		});
-
-		it("should show unknown identifier when session data is missing", async () => {
-			mocks.mockExistsSync.mockReturnValue(true);
-			mocks.mockReadFile.mockResolvedValue(
-				createStateFile({
-					"issue-uuid-orphan": "repo-uuid-orphan",
-				}),
-			);
-
-			await command.execute([]);
-
-			expect(mockApp.logger.info).toHaveBeenCalledWith(
-				"  (unknown identifier)",
 			);
 		});
 	});
@@ -331,7 +291,9 @@ describe("CacheClearCommand", () => {
 			mocks.mockExistsSync.mockReturnValue(true);
 			mocks.mockReadFile.mockResolvedValue("invalid json{");
 
-			await expect(command.execute([])).rejects.toThrow("process.exit called");
+			await expect(command.execute(["*"])).rejects.toThrow(
+				"process.exit called",
+			);
 			expect(mockExit).toHaveBeenCalledWith(1);
 		});
 
@@ -345,7 +307,9 @@ describe("CacheClearCommand", () => {
 				}),
 			);
 
-			await expect(command.execute([])).rejects.toThrow("process.exit called");
+			await expect(command.execute(["*"])).rejects.toThrow(
+				"process.exit called",
+			);
 			expect(mockExit).toHaveBeenCalledWith(1);
 			expect(mockApp.logger.error).toHaveBeenCalledWith(
 				"Unsupported state file version: 1.0. Expected 2.0",
@@ -356,7 +320,9 @@ describe("CacheClearCommand", () => {
 			mocks.mockExistsSync.mockReturnValue(true);
 			mocks.mockReadFile.mockRejectedValue(new Error("Read error"));
 
-			await expect(command.execute([])).rejects.toThrow("process.exit called");
+			await expect(command.execute(["*"])).rejects.toThrow(
+				"process.exit called",
+			);
 			expect(mockExit).toHaveBeenCalledWith(1);
 		});
 	});

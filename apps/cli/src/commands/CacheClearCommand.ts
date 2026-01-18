@@ -26,13 +26,14 @@ interface CacheEntry {
  * Command to clear the repository cache for issues.
  *
  * Usage:
- *   cyrus cache clear [pattern]
+ *   cyrus cache clear <pattern>
  *
- * Pattern can be:
+ * Pattern is required and can be:
  *   - "*" - Clear all cache entries
  *   - "RUB-*" - Clear entries for issues with identifiers starting with "RUB-"
  *   - "RUB-101" - Clear entry for a specific issue identifier
- *   - No pattern - List cached entries without clearing
+ *
+ * Use "cyrus cache list" to see cached entries before clearing.
  */
 export class CacheClearCommand extends BaseCommand {
 	private getStateFilePath(): string {
@@ -41,6 +42,22 @@ export class CacheClearCommand extends BaseCommand {
 
 	async execute(args: string[]): Promise<void> {
 		const pattern = args[0];
+
+		// Pattern is required
+		if (!pattern) {
+			this.logError("Pattern is required.");
+			this.logger.info("");
+			this.logger.info("Usage: cyrus cache clear <pattern>");
+			this.logger.info("");
+			this.logger.info("Pattern can be:");
+			this.logger.info('  "*"       - Clear all entries');
+			this.logger.info('  "RUB-*"   - Clear entries matching prefix');
+			this.logger.info('  "RUB-101" - Clear specific issue');
+			this.logger.info("");
+			this.logger.info('Use "cyrus cache list" to see cached entries.');
+			process.exit(1);
+		}
+
 		const stateFilePath = this.getStateFilePath();
 
 		if (!existsSync(stateFilePath)) {
@@ -73,12 +90,6 @@ export class CacheClearCommand extends BaseCommand {
 
 		if (cacheEntries.length === 0) {
 			this.logger.info("Cache is empty. Nothing to clear.");
-			return;
-		}
-
-		// If no pattern provided, list cache entries
-		if (!pattern) {
-			this.listCacheEntries(cacheEntries);
 			return;
 		}
 
@@ -129,28 +140,6 @@ export class CacheClearCommand extends BaseCommand {
 		}
 
 		return entries;
-	}
-
-	/**
-	 * List all cache entries
-	 */
-	private listCacheEntries(entries: CacheEntry[]): void {
-		this.logger.info(`Found ${entries.length} cached repository selections:\n`);
-
-		for (const entry of entries) {
-			const identifier = entry.issueIdentifier || "(unknown identifier)";
-			this.logger.info(`  ${identifier}`);
-			this.logger.info(`    Issue ID: ${entry.issueId}`);
-			this.logger.info(`    Repository ID: ${entry.repositoryId}`);
-			this.logger.info("");
-		}
-
-		this.logger.info(
-			'Use "cyrus cache clear <pattern>" to clear entries. Pattern can be:',
-		);
-		this.logger.info("  *         - Clear all entries");
-		this.logger.info("  RUB-*     - Clear entries matching prefix");
-		this.logger.info("  RUB-101   - Clear specific issue");
 	}
 
 	/**
