@@ -221,12 +221,17 @@ IMPORTANT: Respond with ONLY the classification word, nothing else.`;
 	/**
 	 * Match workflows by issue labels and return a routing decision.
 	 *
-	 * This is a pure function that takes workflows as a parameter.
-	 * When multiple workflows match, selects the one with highest priority.
+	 * Matching priority:
+	 * 1. Direct workflow name match: If a label exactly matches a workflow name
+	 *    (case-insensitive), that workflow is selected immediately.
+	 *    Example: "full-development" label → "full-development" workflow
+	 *
+	 * 2. Trigger label match: Falls back to matching against workflow.triggers.labels
+	 *    when no direct name match is found. Selects highest priority when multiple match.
 	 *
 	 * @param issueLabels - Labels from the Linear issue
 	 * @param workflows - Workflow definitions to match against
-	 * @returns WorkflowSelectionDecision if a label match is found, null otherwise
+	 * @returns WorkflowSelectionDecision if a match is found, null otherwise
 	 */
 	matchWorkflowByLabels(
 		issueLabels: string[],
@@ -238,6 +243,37 @@ IMPORTANT: Respond with ONLY the classification word, nothing else.`;
 
 		const normalizedIssueLabels = issueLabels.map((l) => l.toLowerCase());
 
+		// First, try direct workflow name matching
+		// A label that matches a workflow name exactly triggers that workflow
+		const workflowNames = workflows.map((w) => w.name.toLowerCase());
+		const directMatchLabel = normalizedIssueLabels.find((label) =>
+			workflowNames.includes(label),
+		);
+
+		if (directMatchLabel) {
+			const matchedWorkflow = workflows.find(
+				(w) => w.name.toLowerCase() === directMatchLabel,
+			);
+
+			if (matchedWorkflow) {
+				const procedure = this.procedures.get(matchedWorkflow.name);
+
+				if (procedure) {
+					const classification: RequestClassification =
+						matchedWorkflow.triggers?.classifications?.[0] ?? "code";
+
+					return {
+						workflowName: matchedWorkflow.name,
+						procedure,
+						selectionMode: "direct",
+						classification,
+						reasoning: `Direct workflow name match: "${directMatchLabel}" → "${matchedWorkflow.name}"`,
+					};
+				}
+			}
+		}
+
+		// Fall back to trigger label matching
 		// Find workflows with matching labels, sorted by priority (highest first)
 		const matchingWorkflows = workflows
 			.filter((w) => {
@@ -279,7 +315,7 @@ IMPORTANT: Respond with ONLY the classification word, nothing else.`;
 			procedure,
 			selectionMode: "direct",
 			classification,
-			reasoning: `Label-based match: [${matchedLabels?.join(", ")}] → "${selectedWorkflow.name}"`,
+			reasoning: `Trigger label match: [${matchedLabels?.join(", ")}] → "${selectedWorkflow.name}"`,
 		};
 	}
 
