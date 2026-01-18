@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { Application } from "./Application.js";
 import { AuthCommand } from "./commands/AuthCommand.js";
+import { CacheClearCommand } from "./commands/CacheClearCommand.js";
 import { CheckTokensCommand } from "./commands/CheckTokensCommand.js";
 import { RefreshTokenCommand } from "./commands/RefreshTokenCommand.js";
 import { SelfAddRepoCommand } from "./commands/SelfAddRepoCommand.js";
@@ -122,6 +123,27 @@ program
 		await new SelfAddRepoCommand(app).execute(
 			[url, workspace].filter(Boolean) as string[],
 		);
+	});
+
+// Cache command group
+const cacheCommand = program
+	.command("cache")
+	.description("Manage the Cyrus cache");
+
+// Cache clear subcommand
+cacheCommand
+	.command("clear [pattern]")
+	.description(
+		'Clear cached repository selections. Pattern can be: "*" (all), "RUB-*" (prefix), or "RUB-101" (exact). Omit pattern to list entries.',
+	)
+	.action(async (pattern?: string) => {
+		const opts = program.opts();
+		const app = new Application(
+			opts.cyrusHome,
+			opts.envFile,
+			packageJson.version,
+		);
+		await new CacheClearCommand(app).execute(pattern ? [pattern] : []);
 	});
 
 // Parse and execute
