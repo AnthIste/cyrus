@@ -8,6 +8,7 @@
 import type { CyrusAgentSession, ISimpleAgentRunner } from "cyrus-core";
 import { SimpleGeminiRunner } from "cyrus-gemini-runner";
 import { SimpleClaudeRunner } from "cyrus-simple-agent-runner";
+import { buildClassificationPromptXml } from "../formatters.js";
 import type { WorkflowDefinition } from "../workflows/types.js";
 import { getProcedureForClassification, PROCEDURES } from "./registry.js";
 import type {
@@ -151,44 +152,13 @@ IMPORTANT: Respond with ONLY the classification word, nothing else.`;
 
 	/**
 	 * Build the classification prompt from issue context
+	 *
+	 * Uses the shared formatters module for consistent XML output.
 	 */
 	private buildClassificationPrompt(
 		issueContext: IssueContextForClassification,
 	): string {
-		const parts: string[] = [];
-
-		parts.push("<linear_issue>");
-		parts.push(`  <identifier>${issueContext.identifier}</identifier>`);
-		parts.push(`  <title>${issueContext.title}</title>`);
-
-		if (issueContext.description) {
-			parts.push(`  <description>`);
-			parts.push(issueContext.description);
-			parts.push(`  </description>`);
-		}
-
-		if (issueContext.state) {
-			parts.push(`  <state>${issueContext.state}</state>`);
-		}
-
-		if (issueContext.priority) {
-			parts.push(`  <priority>${issueContext.priority}</priority>`);
-		}
-
-		if (issueContext.labels && issueContext.labels.length > 0) {
-			parts.push(`  <labels>${issueContext.labels.join(", ")}</labels>`);
-		}
-
-		parts.push("</linear_issue>");
-
-		if (issueContext.newComment) {
-			parts.push("");
-			parts.push("<new_comment>");
-			parts.push(issueContext.newComment);
-			parts.push("</new_comment>");
-		}
-
-		return parts.join("\n");
+		return buildClassificationPromptXml(issueContext);
 	}
 
 	/**
