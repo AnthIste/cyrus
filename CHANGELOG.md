@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
-- **Cache clear command** - Added `cyrus cache clear [pattern]` command to clear cached repository selections for issues. Supports clearing all entries with `*`, by prefix pattern (e.g., `RUB-*`), or specific issue (e.g., `RUB-101`). Useful for resolving incorrect repository routing when the cache becomes stale. ([RUB-102](https://linear.app/rbakker/issue/RUB-102), [#15](https://github.com/AnthIste/cyrus/pull/15))
+- **Cache management commands** - Added `cyrus cache list` to view cached repository selections and `cyrus cache clear <pattern>` to clear them. Supports clearing all entries with `*`, by prefix pattern (e.g., `RUB-*`), or specific issue (e.g., `RUB-101`). Useful for resolving incorrect repository routing when the cache becomes stale. ([RUB-102](https://linear.app/rbakker/issue/RUB-102), [#15](https://github.com/AnthIste/cyrus/pull/15))
 
 ## [0.2.15] - 2026-01-16
 
