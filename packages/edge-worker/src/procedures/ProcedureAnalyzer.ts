@@ -8,9 +8,11 @@
 import type { CyrusAgentSession, ISimpleAgentRunner } from "cyrus-core";
 import { SimpleGeminiRunner } from "cyrus-gemini-runner";
 import { SimpleClaudeRunner } from "cyrus-simple-agent-runner";
+import { buildClassificationPromptXml } from "../formatters.js";
 import type { WorkflowDefinition } from "../workflows/types.js";
 import { getProcedureForClassification, PROCEDURES } from "./registry.js";
 import type {
+	IssueContextForClassification,
 	ProcedureAnalysisDecision,
 	ProcedureDefinition,
 	ProcedureMetadata,
@@ -149,16 +151,38 @@ IMPORTANT: Respond with ONLY the classification word, nothing else.`;
 	}
 
 	/**
+	 * Build the classification prompt from issue context
+	 *
+	 * Uses the shared formatters module for consistent XML output.
+	 */
+	private buildClassificationPrompt(
+		issueContext: IssueContextForClassification,
+	): string {
+		return buildClassificationPromptXml(issueContext);
+	}
+
+	/**
 	 * Analyze a request and determine which procedure to use
+	 *
+	 * @param requestText - Plain text of the request (legacy parameter, used as fallback)
+	 * @param issueContext - Optional structured issue context for better classification
 	 */
 	async determineRoutine(
 		requestText: string,
+		issueContext?: IssueContextForClassification,
 	): Promise<ProcedureAnalysisDecision> {
 		try {
+			// Build the prompt - use structured context if available, otherwise fall back to plain text
+			let prompt: string;
+			if (issueContext) {
+				const contextXml = this.buildClassificationPrompt(issueContext);
+				prompt = `Classify this Linear issue request:\n\n${contextXml}`;
+			} else {
+				prompt = `Classify this Linear issue request:\n\n${requestText}`;
+			}
+
 			// Classify the request using analysis runner
-			const result = await this.analysisRunner.query(
-				`Classify this Linear issue request:\n\n${requestText}`,
-			);
+			const result = await this.analysisRunner.query(prompt);
 
 			const classification = result.response;
 

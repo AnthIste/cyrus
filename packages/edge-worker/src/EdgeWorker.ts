@@ -69,6 +69,7 @@ import { AgentSessionManager } from "./AgentSessionManager.js";
 import { AskUserQuestionHandler } from "./AskUserQuestionHandler.js";
 import { GitService } from "./GitService.js";
 import {
+	type IssueContextForClassification,
 	ProcedureAnalyzer,
 	type ProcedureDefinition,
 	type RequestClassification,
@@ -1931,11 +1932,18 @@ export class EdgeWorker extends EventEmitter {
 				finalClassification = labelMatch.classification;
 				console.log(`[EdgeWorker] ${labelMatch.reasoning}`);
 			} else {
-				// No label match - use AI classification
-				const issueDescription =
-					`${issue.title}\n\n${fullIssue.description || ""}`.trim();
-				const routingDecision =
-					await this.procedureAnalyzer.determineRoutine(issueDescription);
+				// No label match - use AI classification with rich issue context
+				const issueContext: IssueContextForClassification = {
+					identifier: fullIssue.identifier,
+					title: fullIssue.title,
+					description: fullIssue.description || undefined,
+					labels: labels.length > 0 ? labels : undefined,
+					priority: this.mapPriorityToLabel(fullIssue.priority),
+				};
+				const routingDecision = await this.procedureAnalyzer.determineRoutine(
+					"",
+					issueContext,
+				);
 				finalProcedure = routingDecision.procedure;
 				finalClassification = routingDecision.classification;
 				console.log(
@@ -2675,6 +2683,27 @@ export class EdgeWorker extends EventEmitter {
 				error,
 			);
 			return [];
+		}
+	}
+
+	/**
+	 * Map Linear priority number to human-readable label.
+	 * Linear priority: 0 = No priority, 1 = Urgent, 2 = High, 3 = Normal, 4 = Low
+	 */
+	private mapPriorityToLabel(priority: number): string | undefined {
+		switch (priority) {
+			case 0:
+				return undefined; // No priority
+			case 1:
+				return "Urgent";
+			case 2:
+				return "High";
+			case 3:
+				return "Normal";
+			case 4:
+				return "Low";
+			default:
+				return undefined;
 		}
 	}
 
@@ -5759,11 +5788,25 @@ ${input.userComment}
 		const issueTracker = this.issueTrackers.get(repository.id);
 		let labelNames: string[] = [];
 		let hasOrchestratorLabel = false;
+		let issueContext: IssueContextForClassification | undefined;
 
 		if (issueTracker) {
 			try {
 				const fullIssue = await issueTracker.fetchIssue(session.issueId);
 				labelNames = await this.fetchIssueLabels(fullIssue);
+
+				// Build issue context for AI classification
+				// This provides the classifier with full issue information
+				const state = await fullIssue.state;
+				issueContext = {
+					identifier: fullIssue.identifier,
+					title: fullIssue.title,
+					description: fullIssue.description ?? undefined,
+					state: state?.name,
+					priority: this.mapPriorityToLabel(fullIssue.priority),
+					labels: labelNames.length > 0 ? labelNames : undefined,
+					newComment: promptBody.trim() || undefined,
+				};
 
 				// Lowercase labels for case-insensitive comparison
 				const lowercaseLabels = labelNames.map((label) => label.toLowerCase());
@@ -5787,11 +5830,8 @@ ${input.userComment}
 				hasOrchestratorLabel =
 					hasHardcodedOrchestratorLabel || hasConfiguredOrchestratorLabel;
 			} catch (error) {
-				console.error(
-					`[EdgeWorker] Failed to fetch issue labels for routing:`,
-					error,
-				);
-				// Continue with AI routing if label fetch fails
+				console.error(`[EdgeWorker] Failed to fetch issue for routing:`, error);
+				// Continue with AI routing if issue fetch fails (will use promptBody only)
 			}
 		}
 
@@ -5824,9 +5864,10 @@ ${input.userComment}
 				finalClassification = labelMatch.classification;
 				console.log(`[EdgeWorker] ${labelMatch.reasoning}`);
 			} else {
-				// No label match - use AI classification
+				// No label match - use AI classification with full issue context
 				const routingDecision = await this.procedureAnalyzer.determineRoutine(
 					promptBody.trim(),
+					issueContext,
 				);
 				selectedProcedure = routingDecision.procedure;
 				finalClassification = routingDecision.classification;

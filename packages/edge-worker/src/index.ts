@@ -16,6 +16,15 @@ export type {
 } from "./AskUserQuestionHandler.js";
 export { AskUserQuestionHandler } from "./AskUserQuestionHandler.js";
 export { EdgeWorker } from "./EdgeWorker.js";
+// Export formatters for shared XML formatting utilities
+export {
+	buildClassificationPromptXml,
+	type ClassificationIssueContext,
+	type FormatIssueXmlOptions,
+	formatIssueXml,
+	formatNewCommentXml,
+	type MinimalIssueContext,
+} from "./formatters.js";
 export type { GitServiceLogger } from "./GitService.js";
 export { GitService } from "./GitService.js";
 export type {

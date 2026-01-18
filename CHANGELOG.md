@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - **Tilde expansion in workflows path** - Tilde (`~`) paths in `workflowsRepository.source` now correctly expand to the user's home directory. ([#13](https://github.com/AnthIste/cyrus/pull/13))
+- **Workflow routing classification** - AI classifier now receives full issue context (identifier, title, description, priority, labels) instead of just title and description, enabling more accurate workflow routing decisions. ([RUB-77](https://linear.app/rbakker/issue/RUB-77), [#14](https://github.com/AnthIste/cyrus/pull/14))
 
 ## [0.2.15] - 2026-01-16
 

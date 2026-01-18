@@ -338,7 +338,7 @@ Work completed on subtask TEST-124.
 
 			// Assert - Should not throw, should fall back to AI routing
 			expect(console.error).toHaveBeenCalledWith(
-				expect.stringContaining("Failed to fetch issue labels for routing"),
+				expect.stringContaining("Failed to fetch issue for routing"),
 				expect.any(Error),
 			);
 
