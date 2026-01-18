@@ -8,8 +8,10 @@ import type { WorkflowDefinition } from "../src/workflows/types";
 /**
  * Tests for ProcedureAnalyzer.matchWorkflowByLabels()
  *
- * This method matches issue labels against workflow trigger labels,
- * selecting the highest priority matching workflow.
+ * This method matches issue labels against workflows with two matching strategies:
+ * 1. Direct workflow name match: A label that matches a workflow name exactly
+ *    triggers that workflow (e.g., "full-development" label → "full-development" workflow)
+ * 2. Trigger label match: Falls back to matching against workflow.triggers.labels
  */
 
 describe("ProcedureAnalyzer - matchWorkflowByLabels", () => {
@@ -104,8 +106,74 @@ describe("ProcedureAnalyzer - matchWorkflowByLabels", () => {
 		}
 	}
 
-	describe("Label matching", () => {
-		it("should match workflow by label (bug -> debugger-full)", () => {
+	describe("Direct workflow name matching", () => {
+		it("should match label directly to workflow name (full-development)", () => {
+			const workflows = createSampleWorkflows();
+			registerWorkflowsAsProcedures(workflows);
+
+			const result = procedureAnalyzer.matchWorkflowByLabels(
+				["full-development"],
+				workflows,
+			);
+
+			expect(result).not.toBeNull();
+			expect(result!.workflowName).toBe("full-development");
+			expect(result!.selectionMode).toBe("direct");
+			expect(result!.reasoning).toContain("Direct workflow name match");
+		});
+
+		it("should match label directly to workflow name case-insensitively", () => {
+			const workflows = createSampleWorkflows();
+			registerWorkflowsAsProcedures(workflows);
+
+			const result = procedureAnalyzer.matchWorkflowByLabels(
+				["FULL-DEVELOPMENT"],
+				workflows,
+			);
+
+			expect(result).not.toBeNull();
+			expect(result!.workflowName).toBe("full-development");
+			expect(result!.selectionMode).toBe("direct");
+			expect(result!.reasoning).toContain("Direct workflow name match");
+		});
+
+		it("should prioritize direct name match over trigger label match", () => {
+			const workflows = createSampleWorkflows();
+			registerWorkflowsAsProcedures(workflows);
+
+			// "security-review" matches workflow name, "bug" matches trigger label
+			const result = procedureAnalyzer.matchWorkflowByLabels(
+				["security-review", "bug"],
+				workflows,
+			);
+
+			// Should match security-review by name, not debugger-full by trigger
+			expect(result).not.toBeNull();
+			expect(result!.workflowName).toBe("security-review");
+			expect(result!.reasoning).toContain("Direct workflow name match");
+		});
+
+		it("should return null for direct name match when procedure not registered", () => {
+			const workflows: WorkflowDefinition[] = [
+				{
+					name: "unregistered-workflow",
+					description: "Workflow without registered procedure",
+					subroutines: [{ name: "test", prompt_file: "test.md" }],
+				},
+			];
+			// Don't register the procedure
+
+			const result = procedureAnalyzer.matchWorkflowByLabels(
+				["unregistered-workflow"],
+				workflows,
+			);
+
+			expect(result).toBeNull();
+		});
+	});
+
+	describe("Trigger label matching", () => {
+		it("should match workflow by trigger label (bug -> debugger-full)", () => {
 			const workflows = createSampleWorkflows();
 			registerWorkflowsAsProcedures(workflows);
 
@@ -117,10 +185,10 @@ describe("ProcedureAnalyzer - matchWorkflowByLabels", () => {
 			expect(result).not.toBeNull();
 			expect(result!.workflowName).toBe("debugger-full");
 			expect(result!.selectionMode).toBe("direct");
-			expect(result!.reasoning).toContain("Label-based match");
+			expect(result!.reasoning).toContain("Trigger label match");
 		});
 
-		it("should match workflow by label (security -> security-review)", () => {
+		it("should match workflow by trigger label (security -> security-review)", () => {
 			const workflows = createSampleWorkflows();
 			registerWorkflowsAsProcedures(workflows);
 
