@@ -6,6 +6,7 @@ export type {
 	EdgeWorkerConfig,
 	OAuthCallbackHandler,
 	RepositoryConfig,
+	WorkflowSourceConfig,
 	Workspace,
 } from "cyrus-core";
 export { AgentSessionManager } from "./AgentSessionManager.js";
@@ -15,8 +16,30 @@ export type {
 } from "./AskUserQuestionHandler.js";
 export { AskUserQuestionHandler } from "./AskUserQuestionHandler.js";
 export { EdgeWorker } from "./EdgeWorker.js";
+// Export formatters for shared XML formatting utilities
+export {
+	buildClassificationPromptXml,
+	type ClassificationIssueContext,
+	type FormatIssueXmlOptions,
+	formatIssueXml,
+	formatNewCommentXml,
+	type MinimalIssueContext,
+} from "./formatters.js";
 export type { GitServiceLogger } from "./GitService.js";
 export { GitService } from "./GitService.js";
+export type {
+	ProcedureAnalysisDecision,
+	ProcedureDefinition,
+	RequestClassification,
+	SimpleRunnerType,
+	WorkflowSelectionDecision,
+} from "./procedures/index.js";
+// Export procedure registry and analyzer for built-in workflows
+export {
+	CLASSIFICATION_TO_PROCEDURE,
+	PROCEDURES,
+	ProcedureAnalyzer,
+} from "./procedures/index.js";
 export { RepositoryRouter } from "./RepositoryRouter.js";
 export { SharedApplicationServer } from "./SharedApplicationServer.js";
 export type { EdgeWorkerEvents } from "./types.js";
@@ -32,3 +55,16 @@ export {
 } from "./validation/index.js";
 export type { WorktreeIncludeLogger } from "./WorktreeIncludeService.js";
 export { WorktreeIncludeService } from "./WorktreeIncludeService.js";
+// Export workflow types for YAML workflow definitions
+export type {
+	DirectoryParseResult,
+	SubroutineReference,
+	ValidationResult as WorkflowValidationResult,
+	WorkflowCollection,
+	WorkflowDefinition,
+	WorkflowLoaderConfig,
+	WorkflowMatchResult,
+	WorkflowTriggers,
+} from "./workflows/index.js";
+// Export workflow loader and parser for CLI usage
+export { WorkflowLoader, WorkflowParser } from "./workflows/index.js";

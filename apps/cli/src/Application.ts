@@ -303,19 +303,28 @@ export class Application {
 	}
 
 	/**
-	 * Handle graceful shutdown
+	 * Cleanup watchers without exiting the process
+	 * Use this for one-off commands that shouldn't keep the process alive
 	 */
-	async shutdown(): Promise<void> {
+	cleanup(): void {
 		// Close .env file watcher
 		if (this.envWatcher) {
 			this.envWatcher.close();
+			this.envWatcher = undefined;
 		}
 
 		// Close config file watcher
 		if (this.configWatcher) {
 			this.configWatcher.close();
+			this.configWatcher = undefined;
 		}
+	}
 
+	/**
+	 * Handle graceful shutdown
+	 */
+	async shutdown(): Promise<void> {
+		this.cleanup();
 		await this.worker.stop();
 		process.exit(0);
 	}

@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **External workflows repository** - Load custom workflows from a local directory or Git repository. Configure `workflowsRepository` in your config to specify a source path or Git URL. External workflows override built-in workflows by name, enabling teams to customize procedures without modifying Cyrus core. ([#13](https://github.com/AnthIste/cyrus/pull/13))
+- **Workflow management CLI** - Added `cyrus workflows` command with subcommands: `list` (view workflows), `show <name>` (display details), `validate <path>` (validate YAML files), `refresh` (reload from source), `resolve` (test routing), and `classifications` (list valid types). ([#13](https://github.com/AnthIste/cyrus/pull/13))
+
+### Fixed
+- **Tilde expansion in workflows path** - Tilde (`~`) paths in `workflowsRepository.source` now correctly expand to the user's home directory. ([#13](https://github.com/AnthIste/cyrus/pull/13))
+- **Workflow routing classification** - AI classifier now receives full issue context (identifier, title, description, priority, labels) instead of just title and description, enabling more accurate workflow routing decisions. ([RUB-77](https://linear.app/rbakker/issue/RUB-77), [#14](https://github.com/AnthIste/cyrus/pull/14))
+- **Label-based workflow selection** - Labels now directly match workflow names (e.g., `full-development` label triggers `full-development` workflow) instead of only matching trigger labels. Labels that don't match any workflow name are passed as context to the AI classifier. ([RUB-78](https://linear.app/rbakker/issue/RUB-78), [#16](https://github.com/AnthIste/cyrus/pull/16))
+
 ## [0.2.15] - 2026-01-16
 
 ### Added

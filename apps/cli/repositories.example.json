@@ -25,5 +25,10 @@
 			"isActive": true,
 			"promptTemplatePath": "./custom-prompt.md"
 		}
-	]
+	],
+	"workflowsRepository": {
+		"source": "git@github.com:myorg/cyrus-workflows.git",
+		"branch": "main",
+		"path": "workflows/"
+	}
 }

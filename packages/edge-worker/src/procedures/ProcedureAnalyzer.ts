@@ -8,13 +8,17 @@
 import type { CyrusAgentSession, ISimpleAgentRunner } from "cyrus-core";
 import { SimpleGeminiRunner } from "cyrus-gemini-runner";
 import { SimpleClaudeRunner } from "cyrus-simple-agent-runner";
+import { buildClassificationPromptXml } from "../formatters.js";
+import type { WorkflowDefinition } from "../workflows/types.js";
 import { getProcedureForClassification, PROCEDURES } from "./registry.js";
 import type {
+	IssueContextForClassification,
 	ProcedureAnalysisDecision,
 	ProcedureDefinition,
 	ProcedureMetadata,
 	RequestClassification,
 	SubroutineDefinition,
+	WorkflowSelectionDecision,
 } from "./types.js";
 
 export type SimpleRunnerType = "claude" | "gemini";
@@ -24,6 +28,11 @@ export interface ProcedureAnalyzerConfig {
 	model?: string;
 	timeoutMs?: number;
 	runnerType?: SimpleRunnerType; // Default: "gemini"
+	/**
+	 * Additional procedures to register on initialization.
+	 * These take precedence over built-in procedures with the same name.
+	 */
+	additionalProcedures?: Map<string, ProcedureDefinition>;
 }
 
 export class ProcedureAnalyzer {
@@ -69,6 +78,13 @@ export class ProcedureAnalyzer {
 
 		// Load all predefined procedures from registry
 		this.loadPredefinedProcedures();
+
+		// Register any additional procedures (these override built-in procedures by name)
+		if (config.additionalProcedures) {
+			for (const [name, procedure] of config.additionalProcedures) {
+				this.procedures.set(name, procedure);
+			}
+		}
 	}
 
 	/**
@@ -135,16 +151,38 @@ IMPORTANT: Respond with ONLY the classification word, nothing else.`;
 	}
 
 	/**
+	 * Build the classification prompt from issue context
+	 *
+	 * Uses the shared formatters module for consistent XML output.
+	 */
+	private buildClassificationPrompt(
+		issueContext: IssueContextForClassification,
+	): string {
+		return buildClassificationPromptXml(issueContext);
+	}
+
+	/**
 	 * Analyze a request and determine which procedure to use
+	 *
+	 * @param requestText - Plain text of the request (legacy parameter, used as fallback)
+	 * @param issueContext - Optional structured issue context for better classification
 	 */
 	async determineRoutine(
 		requestText: string,
+		issueContext?: IssueContextForClassification,
 	): Promise<ProcedureAnalysisDecision> {
 		try {
+			// Build the prompt - use structured context if available, otherwise fall back to plain text
+			let prompt: string;
+			if (issueContext) {
+				const contextXml = this.buildClassificationPrompt(issueContext);
+				prompt = `Classify this Linear issue request:\n\n${contextXml}`;
+			} else {
+				prompt = `Classify this Linear issue request:\n\n${requestText}`;
+			}
+
 			// Classify the request using analysis runner
-			const result = await this.analysisRunner.query(
-				`Classify this Linear issue request:\n\n${requestText}`,
-			);
+			const result = await this.analysisRunner.query(prompt);
 
 			const classification = result.response;
 
@@ -178,6 +216,107 @@ IMPORTANT: Respond with ONLY the classification word, nothing else.`;
 				reasoning: `Fallback to full-development due to error: ${error}`,
 			};
 		}
+	}
+
+	/**
+	 * Match workflows by issue labels and return a routing decision.
+	 *
+	 * Matching priority:
+	 * 1. Direct workflow name match: If a label exactly matches a workflow name
+	 *    (case-insensitive), that workflow is selected immediately.
+	 *    Example: "full-development" label → "full-development" workflow
+	 *
+	 * 2. Trigger label match: Falls back to matching against workflow.triggers.labels
+	 *    when no direct name match is found. Selects highest priority when multiple match.
+	 *
+	 * @param issueLabels - Labels from the Linear issue
+	 * @param workflows - Workflow definitions to match against
+	 * @returns WorkflowSelectionDecision if a match is found, null otherwise
+	 */
+	matchWorkflowByLabels(
+		issueLabels: string[],
+		workflows: WorkflowDefinition[],
+	): WorkflowSelectionDecision | null {
+		if (issueLabels.length === 0 || workflows.length === 0) {
+			return null;
+		}
+
+		const normalizedIssueLabels = issueLabels.map((l) => l.toLowerCase());
+
+		// First, try direct workflow name matching
+		// A label that matches a workflow name exactly triggers that workflow
+		const workflowNames = workflows.map((w) => w.name.toLowerCase());
+		const directMatchLabel = normalizedIssueLabels.find((label) =>
+			workflowNames.includes(label),
+		);
+
+		if (directMatchLabel) {
+			const matchedWorkflow = workflows.find(
+				(w) => w.name.toLowerCase() === directMatchLabel,
+			);
+
+			if (matchedWorkflow) {
+				const procedure = this.procedures.get(matchedWorkflow.name);
+
+				if (procedure) {
+					const classification: RequestClassification =
+						matchedWorkflow.triggers?.classifications?.[0] ?? "code";
+
+					return {
+						workflowName: matchedWorkflow.name,
+						procedure,
+						selectionMode: "direct",
+						classification,
+						reasoning: `Direct workflow name match: "${directMatchLabel}" → "${matchedWorkflow.name}"`,
+					};
+				}
+			}
+		}
+
+		// Fall back to trigger label matching
+		// Find workflows with matching labels, sorted by priority (highest first)
+		const matchingWorkflows = workflows
+			.filter((w) => {
+				const triggerLabels = w.triggers?.labels;
+				if (!triggerLabels || triggerLabels.length === 0) {
+					return false;
+				}
+				return triggerLabels.some((triggerLabel) =>
+					normalizedIssueLabels.includes(triggerLabel.toLowerCase()),
+				);
+			})
+			.sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+
+		if (matchingWorkflows.length === 0) {
+			return null;
+		}
+
+		const selectedWorkflow = matchingWorkflows[0]!;
+		const procedure = this.procedures.get(selectedWorkflow.name);
+
+		if (!procedure) {
+			console.log(
+				`[ProcedureAnalyzer] Warning: Matched workflow "${selectedWorkflow.name}" not found in procedures`,
+			);
+			return null;
+		}
+
+		const matchedLabels = selectedWorkflow.triggers?.labels?.filter((l) =>
+			normalizedIssueLabels.includes(l.toLowerCase()),
+		);
+
+		// Use workflow's classification if specified, otherwise default to "code"
+		// (classification is only used for display/logging, not routing)
+		const classification: RequestClassification =
+			selectedWorkflow.triggers?.classifications?.[0] ?? "code";
+
+		return {
+			workflowName: selectedWorkflow.name,
+			procedure,
+			selectionMode: "direct",
+			classification,
+			reasoning: `Trigger label match: [${matchedLabels?.join(", ")}] → "${selectedWorkflow.name}"`,
+		};
 	}
 
 	/**

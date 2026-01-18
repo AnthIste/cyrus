@@ -126,3 +126,57 @@ export interface ProcedureAnalysisDecision {
 	/** Reasoning for the classification (for debugging) */
 	reasoning?: string;
 }
+
+/**
+ * Issue context for classification analysis
+ * Provides rich context about the Linear issue being classified
+ */
+export interface IssueContextForClassification {
+	/** Issue identifier (e.g., "RUB-77") */
+	identifier: string;
+
+	/** Issue title */
+	title: string;
+
+	/** Issue description (may be empty) */
+	description?: string;
+
+	/** Issue state (e.g., "In Progress", "Backlog") */
+	state?: string;
+
+	/** Issue priority (e.g., "High", "Medium", "Low") */
+	priority?: string;
+
+	/** Labels applied to the issue */
+	labels?: string[];
+
+	/** New comment triggering the classification (if any) */
+	newComment?: string;
+}
+
+/**
+ * Selection mode for workflow routing
+ */
+export type WorkflowSelectionMode =
+	| "classification" // Legacy mode: AI classifies into categories, then map to procedure
+	| "direct"; // New mode: AI directly selects workflow from available options
+
+/**
+ * Result of workflow-aware routing decision
+ */
+export interface WorkflowSelectionDecision {
+	/** The selected workflow/procedure name */
+	workflowName: string;
+
+	/** The selected procedure definition */
+	procedure: ProcedureDefinition;
+
+	/** How the workflow was selected */
+	selectionMode: WorkflowSelectionMode;
+
+	/** Classification (if used in classification mode, otherwise inferred) */
+	classification: RequestClassification;
+
+	/** Reasoning for the selection (for debugging) */
+	reasoning?: string;
+}

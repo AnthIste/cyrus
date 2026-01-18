@@ -12,6 +12,7 @@ import { RefreshTokenCommand } from "./commands/RefreshTokenCommand.js";
 import { SelfAddRepoCommand } from "./commands/SelfAddRepoCommand.js";
 import { SelfAuthCommand } from "./commands/SelfAuthCommand.js";
 import { StartCommand } from "./commands/StartCommand.js";
+import { WorkflowsCommand } from "./commands/WorkflowsCommand.js";
 
 // Get the directory of the current module for reading package.json
 const __filename = fileURLToPath(import.meta.url);
@@ -122,6 +123,108 @@ program
 		await new SelfAddRepoCommand(app).execute(
 			[url, workspace].filter(Boolean) as string[],
 		);
+	});
+
+// Workflows command - Manage and inspect workflows
+const workflowsCmd = program
+	.command("workflows")
+	.description("Manage workflows");
+
+workflowsCmd
+	.command("list")
+	.description("List all loaded workflows")
+	.action(async () => {
+		const opts = program.opts();
+		const app = new Application(
+			opts.cyrusHome,
+			opts.envFile,
+			packageJson.version,
+		);
+		await new WorkflowsCommand(app).execute(["list"]);
+		app.cleanup();
+	});
+
+workflowsCmd
+	.command("refresh")
+	.description("Refresh external workflows from source")
+	.action(async () => {
+		const opts = program.opts();
+		const app = new Application(
+			opts.cyrusHome,
+			opts.envFile,
+			packageJson.version,
+		);
+		await new WorkflowsCommand(app).execute(["refresh"]);
+		app.cleanup();
+	});
+
+workflowsCmd
+	.command("validate <path>")
+	.description("Validate a workflow YAML file")
+	.action(async (path: string) => {
+		const opts = program.opts();
+		const app = new Application(
+			opts.cyrusHome,
+			opts.envFile,
+			packageJson.version,
+		);
+		await new WorkflowsCommand(app).execute(["validate", path]);
+		app.cleanup();
+	});
+
+workflowsCmd
+	.command("show <name>")
+	.description("Show details of a specific workflow")
+	.action(async (name: string) => {
+		const opts = program.opts();
+		const app = new Application(
+			opts.cyrusHome,
+			opts.envFile,
+			packageJson.version,
+		);
+		await new WorkflowsCommand(app).execute(["show", name]);
+		app.cleanup();
+	});
+
+workflowsCmd
+	.command("resolve <body>")
+	.description("Resolve workflow for issue body using labels and/or AI")
+	.option(
+		"-l, --label <name>",
+		"Add a label for matching (can be repeated)",
+		(value: string, previous: string[]) => previous.concat([value]),
+		[] as string[],
+	)
+	.option("-r, --runner <type>", "AI runner: claude or gemini", "claude")
+	.action(
+		async (body: string, options: { label: string[]; runner: string }) => {
+			const opts = program.opts();
+			const app = new Application(
+				opts.cyrusHome,
+				opts.envFile,
+				packageJson.version,
+			);
+			await new WorkflowsCommand(app).executeResolve(
+				body,
+				options.label,
+				options.runner as "claude" | "gemini",
+			);
+			app.cleanup();
+		},
+	);
+
+workflowsCmd
+	.command("classifications")
+	.description("List valid request classifications")
+	.action(async () => {
+		const opts = program.opts();
+		const app = new Application(
+			opts.cyrusHome,
+			opts.envFile,
+			packageJson.version,
+		);
+		await new WorkflowsCommand(app).execute(["classifications"]);
+		app.cleanup();
 	});
 
 // Parse and execute
